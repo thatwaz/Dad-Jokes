@@ -7,6 +7,7 @@ import com.thatwaz.dadjokes.domain.model.toEntity
 import com.thatwaz.dadjokes.domain.model.toJoke
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 
@@ -27,7 +28,12 @@ class JokeRepository @Inject constructor(
         return dao.getFavoriteJokes().map { list -> list.map { it.toJoke() } }
     }
 
-
+    // This is a suspend function you call in a blocking way from the worker
+    fun getAllJokesBlocking(): List<Joke> {
+        return runBlocking {
+            dao.getAllJokesNow().map { it.toJoke() }
+        }
+    }
 
 }
 

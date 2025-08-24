@@ -24,5 +24,8 @@ interface JokeDao {
     @Query("SELECT * FROM jokes WHERE isFavorite = 1 ORDER BY id DESC")
     fun getFavoriteJokes(): Flow<List<JokeEntity>>
 
+    @Query("SELECT * FROM jokes")
+    suspend fun getAllJokesNow(): List<JokeEntity>
+
 
 }
