@@ -68,6 +68,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.common)
+    implementation(libs.androidx.datastore.core.android)
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
@@ -78,7 +79,7 @@ dependencies {
 
     implementation(libs.androidx.work.runtime.ktx)
 
-
+    implementation(libs.androidx.datastore.preferences)
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

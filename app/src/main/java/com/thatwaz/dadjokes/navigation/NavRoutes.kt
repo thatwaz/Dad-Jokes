@@ -1,7 +1,13 @@
 package com.thatwaz.dadjokes.navigation
 
 
-sealed class NavRoutes(val route: String) {
-    object Home : NavRoutes("home")
-    object Favorites : NavRoutes("favorites")
+object NavRoutes {
+    val Home = ScreenRoute("home")
+    val Favorites = ScreenRoute("favorites")
+    val Settings = ScreenRoute("settings")
+    val NotificationSettings = ScreenRoute("notification_settings")
 }
+
+data class ScreenRoute(val route: String)
+
+

@@ -24,11 +24,14 @@ object RoomModule {
             appContext,
             JokeDatabase::class.java,
             "joke_database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration() // <- This line added
+            .build()
     }
 
     @Provides
     fun provideJokeDao(db: JokeDatabase): JokeDao = db.jokeDao()
 }
+
 
 

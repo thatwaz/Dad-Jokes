@@ -5,8 +5,11 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "jokes")
 data class JokeEntity(
-    @PrimaryKey val id: String,
-    val joke: String,
-    val rating: Int = 0,
-    val isFavorite: Boolean = false
+    @PrimaryKey val id: Int,
+    val type: String,
+    val setup: String,
+    val punchline: String,
+    val rating: Int,
+    val isFavorite: Boolean
 )
+

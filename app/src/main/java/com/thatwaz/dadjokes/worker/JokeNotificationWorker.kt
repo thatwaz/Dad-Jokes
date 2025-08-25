@@ -1,12 +1,12 @@
 package com.thatwaz.dadjokes.worker
 
-
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.thatwaz.dadjokes.data.repository.JokeRepository
 import com.thatwaz.dadjokes.domain.model.Joke
+import com.thatwaz.dadjokes.notification.JokeNotificationHelper
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -19,7 +19,8 @@ class JokeNotificationWorker @AssistedInject constructor(
 
     override fun doWork(): Result {
         val joke = getRandomJoke() ?: return Result.failure()
-        showNotification(joke.joke)
+        val fullJoke = "${joke.setup} ${joke.punchline}"
+        showNotification(fullJoke)
         return Result.success()
     }
 
@@ -29,7 +30,8 @@ class JokeNotificationWorker @AssistedInject constructor(
     }
 
     private fun showNotification(joke: String) {
-        // Same as before...
+        JokeNotificationHelper.showNotification(applicationContext, joke)
     }
 }
+
 

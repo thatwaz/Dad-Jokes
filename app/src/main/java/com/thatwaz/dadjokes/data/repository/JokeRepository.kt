@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
+import com.thatwaz.dadjokes.data.api.toJoke
+
 
 
 class JokeRepository @Inject constructor(
@@ -17,9 +19,11 @@ class JokeRepository @Inject constructor(
 ) {
     suspend fun getJoke(): Joke {
         val jokeDto = api.getRandomJoke()
-        val cached = dao.getJokeById(jokeDto.id)
+        val cached = dao.getJokeById(jokeDto.id.toString())
         return cached?.toJoke() ?: jokeDto.toJoke()
     }
+
+
 
     suspend fun saveRating(joke: Joke) {
         dao.upsert(joke.toEntity())

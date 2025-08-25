@@ -54,46 +54,30 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         jokeState?.let { joke ->
-            val (setup, punchline) = remember(joke.joke) {
-                when {
-                    '?' in joke.joke -> {
-                        val q = joke.joke.indexOf('?')
-                        joke.joke.substring(0..q) to joke.joke.substring(q + 1).trim()
-                    }
-                    ".\n" in joke.joke -> {
-                        val parts = joke.joke.split(".\n", limit = 2)
-                        parts[0] + "." to parts[1].trim()
-                    }
-                    "\n" in joke.joke -> {
-                        val parts = joke.joke.split("\n", limit = 2)
-                        parts[0] to parts[1].trim()
-                    }
-                    else -> joke.joke to ""
-                }
-            }
-
             Column(
                 modifier = Modifier
-                    .clickable(enabled = punchline.isNotBlank()) { isPunchlineRevealed = true }
+                    .clickable(enabled = joke.punchline.isNotBlank()) {
+                        isPunchlineRevealed = true
+                    }
                     .padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = setup,
+                    text = joke.setup,
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center
                 )
 
-                if (isPunchlineRevealed && punchline.isNotBlank()) {
+                if (isPunchlineRevealed && joke.punchline.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = punchline,
+                        text = joke.punchline,
                         style = MaterialTheme.typography.bodyLarge,
                         fontStyle = FontStyle.Italic,
                         color = MaterialTheme.colorScheme.secondary,
                         textAlign = TextAlign.Center
                     )
-                } else if (punchline.isNotBlank()) {
+                } else if (joke.punchline.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Tap to reveal punchline",
@@ -143,7 +127,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
                 onClick = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "$setup ${if (punchline.isNotBlank()) punchline else ""}")
+                        putExtra(Intent.EXTRA_TEXT, "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}")
                     }
                     context.startActivity(Intent.createChooser(intent, "Share this joke via:"))
                 }
@@ -180,6 +164,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
         }
     }
 }
+
 
 
 

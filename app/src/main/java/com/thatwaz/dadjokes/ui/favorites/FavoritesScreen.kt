@@ -80,7 +80,7 @@ fun FavoritesScreen(viewModel: JokeViewModel) {
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        text = joke.joke,
+                                        text = "${joke.setup} ${joke.punchline}".trim(),
                                         style = MaterialTheme.typography.bodyLarge
                                     )
                                     if (rating > 0) {
