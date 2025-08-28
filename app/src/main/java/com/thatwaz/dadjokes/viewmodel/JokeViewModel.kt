@@ -39,6 +39,10 @@ class JokeViewModel @Inject constructor(
     private val jokeHistory = mutableListOf<Joke>()
     private var currentIndex = -1
 
+    val ratedJokes: Flow<List<Joke>> = repository.getRatedJokes()
+
+
+
     val favoriteJokes: StateFlow<List<Joke>> = repository
         .getFavorites()
         .map { jokes ->
@@ -88,11 +92,21 @@ class JokeViewModel @Inject constructor(
         }
     }
 
+    // 1. For single joke detail (uses internal _joke state)
     fun toggleFavorite() {
         _joke.value = _joke.value?.copy(isFavorite = !_joke.value!!.isFavorite)?.also { updated ->
             viewModelScope.launch { repository.saveRating(updated) }
         }
     }
+
+    // 2. For lists of jokes like favorites or ratings (passes in specific joke)
+    fun toggleFavorite(joke: Joke) {
+        viewModelScope.launch {
+            val updated = joke.copy(isFavorite = !joke.isFavorite)
+            repository.saveRating(updated)
+        }
+    }
+
 
     val isCurrentJokeFavorited: StateFlow<Boolean> = combine(joke, favoriteJokes) { currentJoke, favorites ->
         currentJoke?.let { joke -> favorites.any { it.id == joke.id } } ?: false

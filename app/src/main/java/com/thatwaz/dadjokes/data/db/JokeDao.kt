@@ -14,6 +14,9 @@ interface JokeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(joke: JokeEntity)
 
+    @Query("SELECT * FROM jokes WHERE rating > 0 ORDER BY rating DESC")
+    fun getRatedJokes(): Flow<List<JokeEntity>>
+
     @Query("SELECT * FROM jokes WHERE id = :id")
     suspend fun getJokeById(id: String): JokeEntity?
 

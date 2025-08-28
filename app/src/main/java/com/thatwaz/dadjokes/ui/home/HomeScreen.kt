@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thatwaz.dadjokes.ui.components.EmojiRatingBar
+import com.thatwaz.dadjokes.ui.components.TypewriterText
 import com.thatwaz.dadjokes.viewmodel.JokeViewModel
 
 @RequiresApi(35)
@@ -45,6 +46,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
 
     val context = LocalContext.current
     var isPunchlineRevealed by remember { mutableStateOf(false) }
+    var typingDone by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -54,30 +56,43 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         jokeState?.let { joke ->
+            val displaySetup: String
+            val displayPunchline: String
+
+            if (joke.setup.contains("?")) {
+                displaySetup = joke.setup
+                displayPunchline = joke.punchline
+            } else if (joke.setup.contains(".")) {
+                displaySetup = joke.setup.substringBefore(".").trim() + "."
+                displayPunchline = joke.setup.substringAfter(".").trim()
+            } else {
+                displaySetup = joke.setup
+                displayPunchline = joke.punchline
+            }
+
             Column(
                 modifier = Modifier
-                    .clickable(enabled = joke.punchline.isNotBlank()) {
+                    .clickable(enabled = typingDone && displayPunchline.isNotBlank()) {
                         isPunchlineRevealed = true
                     }
                     .padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = joke.setup,
-                    style = MaterialTheme.typography.titleLarge,
-                    textAlign = TextAlign.Center
+                TypewriterText(
+                    fullText = displaySetup,
+                    onTypingComplete = { typingDone = true }
                 )
 
-                if (isPunchlineRevealed && joke.punchline.isNotBlank()) {
+                if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = joke.punchline,
+                        text = displayPunchline,
                         style = MaterialTheme.typography.bodyLarge,
                         fontStyle = FontStyle.Italic,
                         color = MaterialTheme.colorScheme.secondary,
                         textAlign = TextAlign.Center
                     )
-                } else if (joke.punchline.isNotBlank()) {
+                } else if (displayPunchline.isNotBlank() && typingDone) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Tap to reveal punchline",
@@ -127,7 +142,10 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
                 onClick = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}")
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}"
+                        )
                     }
                     context.startActivity(Intent.createChooser(intent, "Share this joke via:"))
                 }
@@ -147,6 +165,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
                 enabled = viewModel.canGoBack(),
                 onClick = {
                     isPunchlineRevealed = false
+                    typingDone = false
                     viewModel.showPreviousJoke()
                 }
             ) {
@@ -156,6 +175,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
             Button(
                 onClick = {
                     isPunchlineRevealed = false
+                    typingDone = false
                     viewModel.fetchJoke()
                 }
             ) {
@@ -164,6 +184,7 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
         }
     }
 }
+
 
 
 
