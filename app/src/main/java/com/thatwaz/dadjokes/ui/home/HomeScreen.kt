@@ -80,8 +80,10 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
             ) {
                 TypewriterText(
                     fullText = displaySetup,
+                    startDelayMillis = 500L, // Adjust this as you like
                     onTypingComplete = { typingDone = true }
                 )
+
 
                 if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))

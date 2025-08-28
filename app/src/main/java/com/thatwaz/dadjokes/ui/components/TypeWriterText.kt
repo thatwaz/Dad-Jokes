@@ -10,27 +10,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.delay
-
 @Composable
 fun TypewriterText(
     fullText: String,
-    typingSpeedMs: Long = 40L, // You can speed up or slow down here
+    typingSpeed: Long = 75L,
+    startDelayMillis: Long = 300L, // <-- Add this line
     onTypingComplete: () -> Unit = {}
 ) {
-    var visibleText by remember { mutableStateOf("") }
+    var displayedText by remember { mutableStateOf("") }
 
     LaunchedEffect(fullText) {
-        visibleText = ""
-        for (i in fullText.indices) {
-            visibleText += fullText[i]
-            delay(typingSpeedMs)
+        displayedText = ""
+        delay(startDelayMillis) // <-- This is the new delay before typing begins
+        for (char in fullText) {
+            displayedText += char
+            delay(typingSpeed)
         }
         onTypingComplete()
     }
 
     Text(
-        text = visibleText,
-        style = MaterialTheme.typography.titleLarge,
+        text = displayedText,
+        style = MaterialTheme.typography.headlineMedium,
         textAlign = TextAlign.Center
     )
 }
+
