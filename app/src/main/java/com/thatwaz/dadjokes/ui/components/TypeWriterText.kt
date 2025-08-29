@@ -13,7 +13,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun TypewriterText(
     fullText: String,
-    typingSpeed: Long = 75L,
+    typingSpeed: Long = 50L,
     startDelayMillis: Long = 300L, // <-- Add this line
     onTypingComplete: () -> Unit = {}
 ) {

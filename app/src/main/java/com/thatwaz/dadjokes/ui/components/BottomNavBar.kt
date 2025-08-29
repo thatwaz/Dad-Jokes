@@ -1,7 +1,7 @@
 package com.thatwaz.dadjokes.ui.components
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ThumbUp
@@ -25,7 +25,7 @@ data class BottomNavItem(
 fun BottomNavBar(navController: NavController) {
     val items = listOf(
         BottomNavItem(NavRoutes.Home.route, Icons.Default.Home, "Home"),
-        BottomNavItem(NavRoutes.Favorites.route, Icons.Default.Favorite, "Favorites"),
+        BottomNavItem(NavRoutes.Saved.route, Icons.AutoMirrored.Filled.List, "Saved"),
         BottomNavItem(NavRoutes.Rated.route, Icons.Default.ThumbUp, "Rated"), // 🆕 Added
         BottomNavItem(NavRoutes.Settings.route, Icons.Default.Settings, "Settings")
     )

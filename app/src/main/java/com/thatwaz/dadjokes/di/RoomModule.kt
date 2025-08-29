@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.thatwaz.dadjokes.data.db.JokeDao
 import com.thatwaz.dadjokes.data.db.JokeDatabase
+import com.thatwaz.dadjokes.data.db.SavedJokeDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,12 +26,15 @@ object RoomModule {
             JokeDatabase::class.java,
             "joke_database"
         )
-            .fallbackToDestructiveMigration() // <- This line added
+            .fallbackToDestructiveMigration()
             .build()
     }
 
     @Provides
     fun provideJokeDao(db: JokeDatabase): JokeDao = db.jokeDao()
+
+    @Provides
+    fun provideSavedJokeDao(db: JokeDatabase): SavedJokeDao = db.savedJokeDao() // <-- New line
 }
 
 

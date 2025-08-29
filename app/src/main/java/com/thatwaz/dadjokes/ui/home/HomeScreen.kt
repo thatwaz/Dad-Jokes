@@ -12,8 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -36,17 +35,19 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.thatwaz.dadjokes.ui.components.EmojiRatingBar
 import com.thatwaz.dadjokes.ui.components.TypewriterText
+import com.thatwaz.dadjokes.ui.dialogs.SaveToPeopleDialog
 import com.thatwaz.dadjokes.viewmodel.JokeViewModel
 
 @RequiresApi(35)
 @Composable
 fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
     val jokeState by viewModel.joke.collectAsState()
-    val isFavorited by viewModel.isCurrentJokeFavorited.collectAsState()
 
     val context = LocalContext.current
     var isPunchlineRevealed by remember { mutableStateOf(false) }
     var typingDone by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    val existingPeople by viewModel.peopleNames.collectAsState()
 
     Column(
         modifier = Modifier
@@ -80,10 +81,9 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
             ) {
                 TypewriterText(
                     fullText = displaySetup,
-                    startDelayMillis = 500L, // Adjust this as you like
+                    startDelayMillis = 500L,
                     onTypingComplete = { typingDone = true }
                 )
-
 
                 if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -123,23 +123,19 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
                 onRatingSelected = { viewModel.rateCurrentJoke(it) }
             )
 
+            // Save to people
             IconButton(
-                onClick = {
-                    if (isFavorited) {
-                        Toast.makeText(context, "Already in favorites!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        viewModel.toggleFavorite()
-                    }
-                },
+                onClick = { showSaveDialog = true },
                 modifier = Modifier.padding(top = 12.dp)
             ) {
                 Icon(
-                    imageVector = if (joke.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (joke.isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (joke.isFavorite) MaterialTheme.colorScheme.primary else Color.Gray
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Save to people",
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
+            // Share
             IconButton(
                 onClick = {
                     val intent = Intent(Intent.ACTION_SEND).apply {
@@ -185,7 +181,21 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
             }
         }
     }
+
+    // Dialog to collect one or more names
+    if (showSaveDialog && jokeState != null) {
+        SaveToPeopleDialog(
+            existingPeople = existingPeople,
+            onDismiss = { showSaveDialog = false },
+            onSave = { people ->
+                viewModel.saveCurrentJokeToPeople(people)
+                Toast.makeText(context, "Saved for ${people.joinToString()}", Toast.LENGTH_SHORT).show()
+                showSaveDialog = false
+            }
+        )
+    }
 }
+
 
 
 
