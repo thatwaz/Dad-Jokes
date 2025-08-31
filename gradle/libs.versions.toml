@@ -1,6 +1,7 @@
 [versions]
 activityCompose = "1.10.1"
 agp = "8.5.0"
+billingKtx = "6.1.0"
 composeBom = "2024.04.01"
 coreKtx = "1.12.0"
 datastoreCoreAndroid = "1.1.7"
@@ -16,6 +17,7 @@ kotlinxCoroutinesCore = "1.8.1"
 lifecycleRuntimeKtx = "2.6.2"
 navigation = "2.7.7"
 okhttp = "4.12.0"
+playServicesAds = "23.4.0"
 retrofit = "2.9.0"
 room = "2.6.1"
 work = "2.9.0"
@@ -44,6 +46,7 @@ androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 
 # Coroutines
+billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billingKtx" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 
 # Dagger Hilt
@@ -53,6 +56,7 @@ hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-com
 
 # Retrofit & OkHttp
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "playServicesAds" }
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 

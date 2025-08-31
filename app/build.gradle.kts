@@ -83,6 +83,10 @@ dependencies {
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
 
+    //Ads/billing
+    implementation(libs.play.services.ads)
+    implementation(libs.billing.ktx)
+
 // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

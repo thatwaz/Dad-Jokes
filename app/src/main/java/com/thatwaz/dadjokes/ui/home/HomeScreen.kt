@@ -1,16 +1,25 @@
 package com.thatwaz.dadjokes.ui.home
 
+
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
@@ -19,7 +28,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,156 +44,208 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.thatwaz.dadjokes.ui.ads.BannerAdSimple
+import com.thatwaz.dadjokes.ui.ads.InterstitialHolder
 import com.thatwaz.dadjokes.ui.components.EmojiRatingBar
 import com.thatwaz.dadjokes.ui.components.TypewriterText
 import com.thatwaz.dadjokes.ui.dialogs.SaveToPeopleDialog
+import com.thatwaz.dadjokes.viewmodel.BillingViewModel
 import com.thatwaz.dadjokes.viewmodel.JokeViewModel
+
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 @RequiresApi(35)
 @Composable
-fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
+fun HomeScreen(
+    viewModel: JokeViewModel = hiltViewModel(),
+    billingVM: BillingViewModel = hiltViewModel()
+) {
     val jokeState by viewModel.joke.collectAsState()
+    val adsEnabled by billingVM.adsEnabled.collectAsState(initial = true)
 
     val context = LocalContext.current
+    val activity = remember { context.findActivity() }
+
     var isPunchlineRevealed by remember { mutableStateOf(false) }
     var typingDone by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
     val existingPeople by viewModel.peopleNames.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        jokeState?.let { joke ->
-            val displaySetup: String
-            val displayPunchline: String
+    // Interstitial: preload once
+    val interstitial = remember { InterstitialHolder(context) }
+    LaunchedEffect(Unit) { interstitial.load() }
 
-            if (joke.setup.contains("?")) {
-                displaySetup = joke.setup
-                displayPunchline = joke.punchline
-            } else if (joke.setup.contains(".")) {
-                displaySetup = joke.setup.substringBefore(".").trim() + "."
-                displayPunchline = joke.setup.substringAfter(".").trim()
-            } else {
-                displaySetup = joke.setup
-                displayPunchline = joke.punchline
-            }
+    // Count Next taps to trigger every 5
+    var nextTapCount by remember { mutableStateOf(0) }
 
-            Column(
-                modifier = Modifier
-                    .clickable(enabled = typingDone && displayPunchline.isNotBlank()) {
-                        isPunchlineRevealed = true
-                    }
-                    .padding(bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                TypewriterText(
-                    fullText = displaySetup,
-                    startDelayMillis = 500L,
-                    onTypingComplete = { typingDone = true }
-                )
+    // Keep your original centered UI; just make it scrollable
+    Box(modifier = Modifier.fillMaxSize()) {
 
-                if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = displayPunchline,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontStyle = FontStyle.Italic,
-                        color = MaterialTheme.colorScheme.secondary,
-                        textAlign = TextAlign.Center
-                    )
-                } else if (displayPunchline.isNotBlank() && typingDone) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Tap to reveal punchline",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                    )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            jokeState?.let { joke ->
+                val displaySetup: String
+                val displayPunchline: String
+                if (joke.setup.contains("?")) {
+                    displaySetup = joke.setup
+                    displayPunchline = joke.punchline
+                } else if (joke.setup.contains(".")) {
+                    displaySetup = joke.setup.substringBefore(".").trim() + "."
+                    displayPunchline = joke.setup.substringAfter(".").trim()
+                } else {
+                    displaySetup = joke.setup
+                    displayPunchline = joke.punchline
                 }
-            }
 
-            Text(
-                text = when (joke.rating) {
-                    1 -> "Oof. That one hurt 😒"
-                    2 -> "Meh."
-                    3 -> "Not bad!"
-                    4 -> "That got a chuckle 😆"
-                    5 -> "ROFL! 😂"
-                    else -> "Rate this joke:"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+                Column(
+                    modifier = Modifier
+                        .clickable(enabled = typingDone && displayPunchline.isNotBlank()) {
+                            isPunchlineRevealed = true
+                        }
+                        .padding(bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    TypewriterText(
+                        fullText = displaySetup,
+                        startDelayMillis = 500L,
+                        onTypingComplete = { typingDone = true }
+                    )
 
-            EmojiRatingBar(
-                selectedRating = joke.rating,
-                onRatingSelected = { viewModel.rateCurrentJoke(it) }
-            )
-
-            // Save to people
-            IconButton(
-                onClick = { showSaveDialog = true },
-                modifier = Modifier.padding(top = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Save to people",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            // Share
-            IconButton(
-                onClick = {
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(
-                            Intent.EXTRA_TEXT,
-                            "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}"
+                    if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = displayPunchline,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.secondary,
+                            textAlign = TextAlign.Center
+                        )
+                    } else if (displayPunchline.isNotBlank() && typingDone) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tap to reveal punchline",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
                         )
                     }
-                    context.startActivity(Intent.createChooser(intent, "Share this joke via:"))
                 }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "Share Joke",
-                    tint = MaterialTheme.colorScheme.primary
+
+                Text(
+                    text = when (joke.rating) {
+                        1 -> "Oof. That one hurt 😒"
+                        2 -> "Meh."
+                        3 -> "Not bad!"
+                        4 -> "That got a chuckle 😆"
+                        5 -> "ROFL! 😂"
+                        else -> "Rate this joke:"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                EmojiRatingBar(
+                    selectedRating = joke.rating,
+                    onRatingSelected = { viewModel.rateCurrentJoke(it) }
+                )
+
+                IconButton(
+                    onClick = { showSaveDialog = true },
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Save to people",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(
+                                Intent.EXTRA_TEXT,
+                                "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}"
+                            )
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share this joke via:"))
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share Joke",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    enabled = viewModel.canGoBack(),
+                    onClick = {
+                        isPunchlineRevealed = false
+                        typingDone = false
+                        viewModel.showPreviousJoke()
+                    }
+                ) { Text("Previous") }
+
+                Button(
+                    onClick = {
+                        isPunchlineRevealed = false
+                        typingDone = false
+                        nextTapCount += 1
+
+                        // Show interstitial every 5 jokes IF ads are enabled
+                        val shouldShowInterstitial = adsEnabled && (nextTapCount % 5 == 0)
+                        if (shouldShowInterstitial && activity != null && interstitial.isReady()) {
+                            interstitial.show(activity) { viewModel.fetchJoke() }
+                        } else {
+                            viewModel.fetchJoke()
+                        }
+                    }
+                ) { Text("Next Joke") }
+            }
+
+            // Tiny link to purchase (centered). You can move this to Settings later.
+            if (adsEnabled) {
+                TextButton(
+                    onClick = { activity?.let { billingVM.launchRemoveAdsPurchase(it) } }
+                ) { Text("Remove Ads") }
+            } else {
+                Text(
+                    text = "Ads removed ✓",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                enabled = viewModel.canGoBack(),
-                onClick = {
-                    isPunchlineRevealed = false
-                    typingDone = false
-                    viewModel.showPreviousJoke()
-                }
-            ) {
-                Text("Previous")
-            }
-
-            Button(
-                onClick = {
-                    isPunchlineRevealed = false
-                    typingDone = false
-                    viewModel.fetchJoke()
-                }
-            ) {
-                Text("Next Joke")
-            }
+        // Overlay banner ONLY if ads are enabled (no layout shift)
+        if (adsEnabled) {
+            BannerAdSimple(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
         }
     }
 
-    // Dialog to collect one or more names
     if (showSaveDialog && jokeState != null) {
         SaveToPeopleDialog(
             existingPeople = existingPeople,
@@ -195,6 +258,12 @@ fun HomeScreen(viewModel: JokeViewModel = hiltViewModel()) {
         )
     }
 }
+
+
+
+
+
+
 
 
 
