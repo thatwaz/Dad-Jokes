@@ -1,6 +1,6 @@
+@file:Suppress("UnusedImport")
+
 package com.thatwaz.dadjokes.ui.home
-
-
 
 import android.app.Activity
 import android.content.Context
@@ -9,36 +9,16 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -49,9 +29,13 @@ import com.thatwaz.dadjokes.ui.ads.InterstitialHolder
 import com.thatwaz.dadjokes.ui.components.EmojiRatingBar
 import com.thatwaz.dadjokes.ui.components.TypewriterText
 import com.thatwaz.dadjokes.ui.dialogs.SaveToPeopleDialog
+import com.thatwaz.dadjokes.ui.sticklerz.QuipBubble
 import com.thatwaz.dadjokes.viewmodel.BillingViewModel
 import com.thatwaz.dadjokes.viewmodel.JokeViewModel
-
+import com.thatwaz.dadjokes.ui.sticklerz.Sticklerz
+import com.thatwaz.dadjokes.ui.sticklerz.StickMood
+import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmen
+import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmenImage
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
@@ -77,36 +61,50 @@ fun HomeScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     val existingPeople by viewModel.peopleNames.collectAsState()
 
-    // Interstitial: preload once
+    // Stick-quip mood
+    var stickMood by remember { mutableStateOf(StickMood.Idle) }
+
+    // Interstitial holder + callbacks
     val interstitial = remember { InterstitialHolder(context) }
     LaunchedEffect(Unit) { interstitial.load() }
+    DisposableEffect(interstitial) {
+        interstitial.onReady = { stickMood = StickMood.InterstitialReady }
+        interstitial.onShown = { stickMood = StickMood.InterstitialShown }
+        interstitial.onDismissed = { stickMood = StickMood.InterstitialDismissed }
+        interstitial.onLoadFailed = { stickMood = StickMood.BannerFailed }
+        onDispose { }
+    }
 
-    // Count Next taps to trigger every 5
     var nextTapCount by remember { mutableStateOf(0) }
 
-    // Keep your original centered UI; just make it scrollable
-    Box(modifier = Modifier.fillMaxSize()) {
+    // ---- layout constants (single source of truth) ----
+    val seatsHeight = 80.dp                  // tweak (72–88.dp)
+    val gapBetweenBannerAndSeats = 16.dp
+    val quipReserve = 32.dp
+    val bannerHeight = if (adsEnabled) 50.dp else 0.dp
+    val footerReserve = seatsHeight + bannerHeight + gapBetweenBannerAndSeats + quipReserve + 12.dp
 
+    Box(Modifier.fillMaxSize()) {
+
+        // ===== Top-aligned main content (scrollable) =====
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.Center,
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = footerReserve), // keep away from footer
+            verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             jokeState?.let { joke ->
-                val displaySetup: String
-                val displayPunchline: String
-                if (joke.setup.contains("?")) {
-                    displaySetup = joke.setup
-                    displayPunchline = joke.punchline
-                } else if (joke.setup.contains(".")) {
-                    displaySetup = joke.setup.substringBefore(".").trim() + "."
-                    displayPunchline = joke.setup.substringAfter(".").trim()
-                } else {
-                    displaySetup = joke.setup
-                    displayPunchline = joke.punchline
+                val (displaySetup, displayPunchline) = when {
+                    joke.setup.contains("?") -> joke.setup to joke.punchline
+                    joke.setup.contains(".") -> {
+                        val setup = joke.setup.substringBefore(".").trim() + "."
+                        val punch = joke.setup.substringAfter(".").trim()
+                        setup to punch
+                    }
+                    else -> joke.setup to joke.punchline
                 }
 
                 Column(
@@ -124,7 +122,7 @@ fun HomeScreen(
                     )
 
                     if (isPunchlineRevealed && displayPunchline.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = displayPunchline,
                             style = MaterialTheme.typography.bodyLarge,
@@ -133,11 +131,11 @@ fun HomeScreen(
                             textAlign = TextAlign.Center
                         )
                     } else if (displayPunchline.isNotBlank() && typingDone) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = "Tap to reveal punchline",
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.Gray,
+                            color = androidx.compose.ui.graphics.Color.Gray,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -191,7 +189,8 @@ fun HomeScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
+
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -210,7 +209,6 @@ fun HomeScreen(
                         typingDone = false
                         nextTapCount += 1
 
-                        // Show interstitial every 5 jokes IF ads are enabled
                         val shouldShowInterstitial = adsEnabled && (nextTapCount % 5 == 0)
                         if (shouldShowInterstitial && activity != null && interstitial.isReady()) {
                             interstitial.show(activity) { viewModel.fetchJoke() }
@@ -221,11 +219,10 @@ fun HomeScreen(
                 ) { Text("Next Joke") }
             }
 
-            // Tiny link to purchase (centered). You can move this to Settings later.
             if (adsEnabled) {
-                TextButton(
-                    onClick = { activity?.let { billingVM.launchRemoveAdsPurchase(it) } }
-                ) { Text("Remove Ads") }
+                TextButton(onClick = { activity?.let { billingVM.launchRemoveAdsPurchase(it) } }) {
+                    Text("Remove Ads")
+                }
             } else {
                 Text(
                     text = "Ads removed ✓",
@@ -235,13 +232,31 @@ fun HomeScreen(
             }
         }
 
-        // Overlay banner ONLY if ads are enabled (no layout shift)
-        if (adsEnabled) {
-            BannerAdSimple(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+        // ===== Bottom footer: Banner -> Quip -> Seats (no overlap) =====
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (adsEnabled) {
+                BannerAdSimple(
+                    modifier = Modifier.fillMaxWidth(),
+                    onLoaded = { stickMood = StickMood.BannerLoaded },
+                    onFailed = { stickMood = StickMood.BannerFailed },
+                    onClicked = { stickMood = StickMood.Clicked }
+                )
+                Spacer(Modifier.height(gapBetweenBannerAndSeats))
+            }
+
+            QuipBubble(
+                mood = stickMood,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            TheaterStickmenImage(
+                modifier = Modifier.fillMaxWidth(),
+                heightDp = seatsHeight
             )
         }
     }
@@ -258,6 +273,11 @@ fun HomeScreen(
         )
     }
 }
+
+
+
+
+
 
 
 
