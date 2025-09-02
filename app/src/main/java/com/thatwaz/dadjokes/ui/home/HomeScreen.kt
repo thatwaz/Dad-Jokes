@@ -62,16 +62,18 @@ fun HomeScreen(
     val existingPeople by viewModel.peopleNames.collectAsState()
 
     // Stick-quip mood
-    var stickMood by remember { mutableStateOf(StickMood.Idle) }
+//    var stickMood by remember { mutableStateOf(StickMood.Idle) }
+    var bannerMood by remember { mutableStateOf(StickMood.Idle) }
+    var interstitialMood by remember { mutableStateOf(StickMood.Idle) }
 
     // Interstitial holder + callbacks
     val interstitial = remember { InterstitialHolder(context) }
     LaunchedEffect(Unit) { interstitial.load() }
     DisposableEffect(interstitial) {
-        interstitial.onReady = { stickMood = StickMood.InterstitialReady }
-        interstitial.onShown = { stickMood = StickMood.InterstitialShown }
-        interstitial.onDismissed = { stickMood = StickMood.InterstitialDismissed }
-        interstitial.onLoadFailed = { stickMood = StickMood.BannerFailed }
+        interstitial.onReady = { interstitialMood = StickMood.InterstitialReady }
+        interstitial.onShown = { interstitialMood = StickMood.InterstitialShown }
+        interstitial.onDismissed = { interstitialMood = StickMood.InterstitialDismissed }
+        interstitial.onLoadFailed = { interstitialMood = StickMood.BannerFailed }
         onDispose { }
     }
 
@@ -242,15 +244,20 @@ fun HomeScreen(
             if (adsEnabled) {
                 BannerAdSimple(
                     modifier = Modifier.fillMaxWidth(),
-                    onLoaded = { stickMood = StickMood.BannerLoaded },
-                    onFailed = { stickMood = StickMood.BannerFailed },
-                    onClicked = { stickMood = StickMood.Clicked }
+                    onLoaded = { bannerMood = StickMood.BannerLoaded },
+                    onFailed = { bannerMood = StickMood.BannerFailed },
+                    onClicked = { bannerMood = StickMood.Clicked }
                 )
                 Spacer(Modifier.height(gapBetweenBannerAndSeats))
             }
 
             QuipBubble(
-                mood = stickMood,
+                mood = bannerMood,
+                allowed = setOf(
+                    StickMood.BannerLoaded,
+                    StickMood.BannerFailed,
+                    StickMood.Clicked
+                ),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
