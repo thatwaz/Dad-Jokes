@@ -72,6 +72,7 @@ dependencies {
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.hilt.common)
+    implementation (libs.androidx.hilt.work)
 
 // Retrofit & OkHttp
     implementation(libs.retrofit)
