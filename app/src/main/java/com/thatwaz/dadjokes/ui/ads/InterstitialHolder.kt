@@ -25,7 +25,7 @@ class InterstitialHolder(
 ) {
     private var ad: InterstitialAd? = null
 
-    // Event callbacks (set these from your Composable if you want reactions)
+    // Event callbacks (optional)
     var onReady: () -> Unit = {}
     var onShown: () -> Unit = {}
     var onDismissed: () -> Unit = {}
@@ -59,6 +59,9 @@ class InterstitialHolder(
     fun show(activity: Activity, afterDismiss: () -> Unit) {
         val current = ad ?: run { afterDismiss(); return }
 
+        // Make sure bars are visible BEFORE showing the ad
+        ensureSystemBarsVisible(activity)
+
         current.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdShowedFullScreenContent() {
                 Log.d(TAG, "Shown")
@@ -67,7 +70,11 @@ class InterstitialHolder(
             override fun onAdDismissedFullScreenContent() {
                 Log.d(TAG, "Dismissed")
                 ad = null
-                load()              // Preload next
+                load() // preload next
+
+                // Make sure bars are visible AFTER the ad too
+                ensureSystemBarsVisible(activity)
+
                 onDismissed()
                 afterDismiss()
             }
@@ -75,25 +82,33 @@ class InterstitialHolder(
                 Log.w(TAG, "Failed to show: $e")
                 ad = null
                 load()
+
+                // If it failed to show, also ensure bars are visible
+                ensureSystemBarsVisible(activity)
+
                 afterDismiss()
             }
         }
 
-        // Make sure system bars are visible so the ad's own close affordance isn't obscured
-        ensureSystemBarsVisible(activity)
-
-        // Don’t force immersive; let the SDK handle its own UI
+        // Don’t force immersive; let the SDK manage its UI
         current.setImmersiveMode(false)
         current.show(activity)
     }
 
     private fun ensureSystemBarsVisible(activity: Activity) {
-        val window = activity.window
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.show(
-            WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars()
-        )
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+        val w = activity.window
+
+        // Lay out below the bars (keeps status/navigation visible)
+        WindowCompat.setDecorFitsSystemWindows(w, true)
+
+        // Explicitly show them
+        WindowInsetsControllerCompat(w, w.decorView).apply {
+            show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+        }
     }
+
+
 }
+
 

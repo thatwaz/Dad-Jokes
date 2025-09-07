@@ -42,7 +42,7 @@ fun JokeCard(
             Spacer(modifier = Modifier.height(8.dp))
             if (joke.rating > 0) {
                 Text(
-                    text = "${getRatingEmoji(joke.rating)} $ratingMessage",
+                    text = "${RatingUi.emojiFor(joke.rating)} $ratingMessage",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -72,12 +72,4 @@ fun JokeCard(
     }
 }
 
-private fun getRatingEmoji(rating: Int): String = when (rating) {
-    1 -> "😒"
-    2 -> "😐"
-    3 -> "🙂"
-    4 -> "😆"
-    5 -> "😂"
-    else -> ""
-}
 

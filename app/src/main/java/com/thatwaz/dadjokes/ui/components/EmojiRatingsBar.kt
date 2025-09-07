@@ -21,15 +21,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-
 @Composable
 fun EmojiRatingBar(
     selectedRating: Int,
     onRatingSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    emojis: List<String> = listOf("😒", "😐", "🙂", "😆", "🤣")
 ) {
-    val emojis = listOf("😒", "😐", "🙂", "😆", "🤣")
-
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -38,25 +36,21 @@ fun EmojiRatingBar(
         emojis.forEachIndexed { index, emoji ->
             val isSelected = selectedRating == index + 1
 
-            // Animate dot color and size
             val dotColor by animateColorAsState(
                 targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray,
                 label = "DotColorAnim"
             )
-
             val dotSize by animateDpAsState(
                 targetValue = if (isSelected) 12.dp else 6.dp,
                 label = "DotSizeAnim"
             )
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Dot above emoji (animated)
                 Box(
                     modifier = Modifier
                         .size(dotSize)
-                        .background(color = dotColor, shape = CircleShape)
+                        .background(dotColor, CircleShape)
                 )
-
                 Text(
                     text = emoji,
                     fontSize = 28.sp,
@@ -68,4 +62,53 @@ fun EmojiRatingBar(
         }
     }
 }
+
+
+
+//@Composable
+//fun EmojiRatingBar(
+//    selectedRating: Int,
+//    onRatingSelected: (Int) -> Unit,
+//    modifier: Modifier = Modifier
+//) {
+//    val emojis = listOf("😒", "😐", "🙂", "😆", "🤣")
+//
+//    Row(
+//        modifier = modifier,
+//        horizontalArrangement = Arrangement.SpaceEvenly,
+//        verticalAlignment = Alignment.CenterVertically
+//    ) {
+//        emojis.forEachIndexed { index, emoji ->
+//            val isSelected = selectedRating == index + 1
+//
+//            // Animate dot color and size
+//            val dotColor by animateColorAsState(
+//                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray,
+//                label = "DotColorAnim"
+//            )
+//
+//            val dotSize by animateDpAsState(
+//                targetValue = if (isSelected) 12.dp else 6.dp,
+//                label = "DotSizeAnim"
+//            )
+//
+//            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+//                // Dot above emoji (animated)
+//                Box(
+//                    modifier = Modifier
+//                        .size(dotSize)
+//                        .background(color = dotColor, shape = CircleShape)
+//                )
+//
+//                Text(
+//                    text = emoji,
+//                    fontSize = 28.sp,
+//                    modifier = Modifier
+//                        .padding(8.dp)
+//                        .clickable { onRatingSelected(index + 1) }
+//                )
+//            }
+//        }
+//    }
+//}
 

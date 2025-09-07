@@ -2,7 +2,12 @@ package com.thatwaz.dadjokes.navigation
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,56 +45,66 @@ fun MainNavigation(viewModel: JokeViewModel) {
     )
 
     Scaffold(
+        // ✅ Tell Scaffold to respect system bars (status + nav)
+        contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = { if (showBottomBar) BottomNavBar(navController) }
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = NavRoutes.Home.route,
-            modifier = Modifier.padding(innerPadding)
+        // ✅ Apply and consume the insets passed from Scaffold
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
-            composable(NavRoutes.Home.route) {
-                // ⬇️ pass navController so Home can navigate to AdPre on the 5th joke
-                HomeScreen(
-                    navController = navController,
-                    viewModel = viewModel
-                )
-            }
+            NavHost(
+                navController = navController,
+                startDestination = NavRoutes.Home.route,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                composable(NavRoutes.Home.route) {
+                    HomeScreen(
+                        navController = navController,
+                        viewModel = viewModel
+                    )
+                }
 
-            composable(NavRoutes.Saved.route) {
-                SavedScreen(navController)
-            }
+                composable(NavRoutes.Saved.route) {
+                    SavedScreen(navController)
+                }
 
-            composable(
-                route = NavRoutes.PersonDetail.route, // "person/{person}"
-                arguments = listOf(navArgument("person") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val person = backStackEntry.arguments?.getString("person").orEmpty()
-                PersonDetailScreen(person = person)
-            }
+                composable(
+                    route = NavRoutes.PersonDetail.route,
+                    arguments = listOf(navArgument("person") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val person = backStackEntry.arguments?.getString("person").orEmpty()
+                    PersonDetailScreen(person = person)
+                }
 
-            composable(NavRoutes.Rated.route) {
-                RatedJokesScreen(viewModel)
-            }
+                composable(NavRoutes.Rated.route) {
+                    RatedJokesScreen(viewModel)
+                }
 
-            composable(NavRoutes.Settings.route) {
-                val settingsViewModel: SettingsViewModel = hiltViewModel()
-                SettingsScreen(navController, settingsViewModel)
-            }
+                composable(NavRoutes.Settings.route) {
+                    val settingsViewModel: SettingsViewModel = hiltViewModel()
+                    SettingsScreen(navController, settingsViewModel)
+                }
 
-            composable(NavRoutes.NotificationSettings.route) {
-                NotificationSettingsScreen(navController)
-            }
+                composable(NavRoutes.NotificationSettings.route) {
+                    NotificationSettingsScreen(navController)
+                }
 
-            // 🔸 New full-screen ad flow screens
-            composable(NavRoutes.AdPre.route) {
-                AdPreScreen(navController = navController)
-            }
-            composable(NavRoutes.AdPost.route) {
-                AdPostScreen(navController = navController)
+                // Full-screen ad flow
+                composable(NavRoutes.AdPre.route) {
+                    AdPreScreen(navController = navController)
+                }
+                composable(NavRoutes.AdPost.route) {
+                    AdPostScreen(navController = navController)
+                }
             }
         }
     }
 }
+
 //@RequiresApi(Build.VERSION_CODES.O)
 //@Composable
 //fun MainNavigation(viewModel: JokeViewModel) {

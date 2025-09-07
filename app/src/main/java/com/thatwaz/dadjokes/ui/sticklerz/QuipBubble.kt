@@ -3,11 +3,15 @@ package com.thatwaz.dadjokes.ui.sticklerz
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,19 +20,28 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // If StickMood already lives in its own file, delete this duplicate.
 enum class StickMood { Idle, BannerLoaded, BannerFailed, InterstitialReady, InterstitialShown, InterstitialDismissed, Clicked }
+
 @Composable
 fun QuipBubble(
     mood: StickMood,
     modifier: Modifier = Modifier,
-    showMs: Long = 10_000L,
-    allowed: Set<StickMood> = emptySet() // explicit opt-in
+    showMs: Long = 8_000L,
+    allowed: Set<StickMood> = emptySet(),
+
+    // ✨ Styling knobs (theme-aware defaults)
+    containerColor: Color = MaterialTheme.colorScheme.tertiaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onTertiaryContainer,
+    borderColor: Color = MaterialTheme.colorScheme.primary,
+    elevation: Dp = 6.dp
 ) {
-    val picker = remember { CooldownPickerByValue(window = 10) }
     var visible by remember { mutableStateOf(false) }
     var line by remember { mutableStateOf("") }
 
@@ -37,43 +50,102 @@ fun QuipBubble(
             visible = false
             return@LaunchedEffect
         }
-
-        // Get the pool for this mood (helper shown below)
-        val pool = Quips.poolFor(mood)
-        if (pool.isEmpty()) {
+        val picked = Quips.randomFor(mood)
+        if (picked != null) {
+            line = picked
+            visible = true
+            kotlinx.coroutines.delay(showMs)
             visible = false
-            return@LaunchedEffect
+        } else {
+            visible = false
         }
-
-        // Use separate buckets so banner & interstitial have independent cooldowns
-        val bucketKey = if (mood.isBannerMood()) "banner" else "interstitial"
-
-        line = picker.pick(pool, key = bucketKey)
-        visible = true
-        kotlinx.coroutines.delay(showMs)
-        visible = false
     }
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+        exit  = fadeOut() + slideOutVertically(targetOffsetY = { it / 3 }),
         modifier = modifier
     ) {
-        Box(
+        Surface(
+            color = containerColor,
+            contentColor = contentColor,
+            shape = RoundedCornerShape(14.dp),
+            tonalElevation = elevation,
+            shadowElevation = elevation,
+            border = BorderStroke(1.dp, borderColor.copy(alpha = 0.35f)),
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(horizontal = 12.dp)
+                .heightIn(min = 44.dp) // 👈 never too short
         ) {
             Text(
-                line,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
+                text = line,
+                style = MaterialTheme.typography.titleSmall, // bigger than body
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .fillMaxWidth()
             )
         }
     }
 }
+
+
+//@Composable
+//fun QuipBubble(
+//    mood: StickMood,
+//    modifier: Modifier = Modifier,
+//    showMs: Long = 10_000L,
+//    allowed: Set<StickMood> = emptySet() // explicit opt-in
+//) {
+//    val picker = remember { CooldownPickerByValue(window = 10) }
+//    var visible by remember { mutableStateOf(false) }
+//    var line by remember { mutableStateOf("") }
+//
+//    LaunchedEffect(mood, allowed) {
+//        if (mood !in allowed || mood == StickMood.Idle) {
+//            visible = false
+//            return@LaunchedEffect
+//        }
+//
+//        // Get the pool for this mood (helper shown below)
+//        val pool = Quips.poolFor(mood)
+//        if (pool.isEmpty()) {
+//            visible = false
+//            return@LaunchedEffect
+//        }
+//
+//        // Use separate buckets so banner & interstitial have independent cooldowns
+//        val bucketKey = if (mood.isBannerMood()) "banner" else "interstitial"
+//
+//        line = picker.pick(pool, key = bucketKey)
+//        visible = true
+//        kotlinx.coroutines.delay(showMs)
+//        visible = false
+//    }
+//
+//    AnimatedVisibility(
+//        visible = visible,
+//        enter = fadeIn(),
+//        exit = fadeOut(),
+//        modifier = modifier
+//    ) {
+//        Box(
+//            modifier = Modifier
+//                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+//                .padding(horizontal = 12.dp, vertical = 8.dp)
+//        ) {
+//            Text(
+//                line,
+//                style = MaterialTheme.typography.bodyMedium,
+//                color = MaterialTheme.colorScheme.onSurface,
+//                textAlign = TextAlign.Center
+//            )
+//        }
+//    }
+//}
 
 // Small helpers (keep in same file or a utils file)
 private fun StickMood.isBannerMood() = when (this) {
