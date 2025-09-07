@@ -67,6 +67,10 @@ dependencies {
     implementation(libs.androidx.datastore.core.android)
     implementation(libs.material)
 
+// Joke Submission
+    implementation(libs.androidx.browser)
+
+
 // Hilt
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
