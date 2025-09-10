@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">Dad Jokes</string>
+    <string name="app_name">Jokes Vault</string>        <!-- launcher label -->
+    <string name="marketing_title">Dad Jokes Vault</string> <!-- optional: use in About/Settings -->
+
+    <string name="cd_intro_dads">
+        Two dads in theater seats; left eating popcorn, right sipping a soda with a straw.
+    </string>
 </resources>

@@ -41,6 +41,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -66,6 +67,10 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.datastore.core.android)
     implementation(libs.material)
+    implementation (libs.androidx.material.icons.extended)
+
+    implementation (libs.okhttp.logging)
+
 
 // Joke Submission
     implementation(libs.androidx.browser)

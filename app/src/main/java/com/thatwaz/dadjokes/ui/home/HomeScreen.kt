@@ -40,6 +40,65 @@ import com.thatwaz.dadjokes.ui.sticklerz.StickMood
 import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmen
 import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmenImage
 
+private fun String.normalizeQuotesAndSpaces(): String = this
+    .replace('“', '"').replace('”', '"')
+    .replace('‘', '\'').replace('’', '\'')
+    // normalize weird spaces (NBSP, thin/narrow spaces)
+    .replace('\u00A0', ' ')
+    .replace('\u202F', ' ')
+    .replace('\u2009', ' ')
+    .replace('\u200A', ' ')
+    .replace('\u2007', ' ')
+    .trim()
+
+private fun String.trimStrayQuotes(): String =
+    this.trim().trim('"', '\'', '“', '”', '‘', '’', ')', ']', '}').trim()
+
+private fun String.ensureEndsWithSentencePunct(): String =
+    if (isEmpty()) this else if (last() in ".!?") this else this + "."
+
+
+// --- The splitter: returns (setup, punchline) ---
+private fun deriveSetupAndPunchline(raw: String): Pair<String, String> {
+    val t = raw.normalizeQuotesAndSpaces()
+
+    // 1) Explicit separators first (most reliable for one-liners)
+    val seps = listOf("\n\n", "\n", " — ", " – ", " - ", "—", "–", ": ")
+    for (sep in seps) {
+        val idx = t.indexOf(sep)
+        if (idx >= 0) {
+            val left  = t.substring(0, idx).trim().ensureEndsWithSentencePunct()
+            val right = t.substring(idx + sep.length).trimStrayQuotes()
+            if (right.isNotBlank()) return left to right
+        }
+    }
+
+    // 2) Sentence boundary:
+    //    Split after the FIRST . ? !, allowing optional quotes/parens and ZERO OR MORE spaces
+    //    Examples handled:
+    //      "Why ...?Because ..."       (no space)
+    //      "Why ...?\" Because ..."    (closing quote then space)
+    //      "Why ...!  Then ..."        (multiple spaces)
+    val m = Regex("""^(.+?[.?!])\s*["'”’)\]]*\s*(.+)$""").find(t)
+    if (m != null) {
+        val left  = m.groupValues[1].trim().ensureEndsWithSentencePunct()
+        val right = m.groupValues[2].trimStrayQuotes()
+        if (right.isNotBlank()) return left to right
+    }
+
+    // 3) (Optional extra safety) If we still didn't split, try a raw '?' without spaces.
+    val q = t.indexOf('?')
+    if (q >= 0 && q + 1 < t.length) {
+        val left  = t.substring(0, q + 1).trim().ensureEndsWithSentencePunct()
+        val right = t.substring(q + 1).trimStrayQuotes()
+        if (right.isNotBlank()) return left to right
+    }
+
+    // 4) No reasonable split → treat as single line (no reveal)
+    return t.ensureEndsWithSentencePunct() to ""
+}
+
+
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
         is Activity -> this
@@ -65,10 +124,14 @@ fun HomeScreen(
     var showSaveDialog by remember { mutableStateOf(false) }
     val existingPeople by viewModel.peopleNames.collectAsState()
 
+    // StateFlow flags
+    val canBack by viewModel.canGoBack.collectAsState()
+    val canForward by viewModel.canGoForward.collectAsState()
+
     // Footer quips are banner-only
     var bannerMood by remember { mutableStateOf(StickMood.Idle) }
 
-    // After AdPost returns, fetch a new joke
+    // After AdPost returns, advance using viewModel.showNextJoke()
     val afterAdFetchFlow = navController.currentBackStackEntry
         ?.savedStateHandle
         ?.getStateFlow("afterAdFetch", false)
@@ -76,7 +139,7 @@ fun HomeScreen(
     LaunchedEffect(afterAdFetch) {
         if (afterAdFetch) {
             navController.currentBackStackEntry?.savedStateHandle?.set("afterAdFetch", false)
-            viewModel.fetchJoke()
+            viewModel.showNextJoke()
         }
     }
 
@@ -86,14 +149,9 @@ fun HomeScreen(
     // ---- layout constants ----
     val seatsHeight = 80.dp
     val gapBetweenBannerAndSeats = 16.dp
-
-    // ⬆️ More room so quips never clip; still reserves space so banner won’t drop.
     val quipReserve = 48.dp
-
     val bannerHeight = if (adsEnabled) 50.dp else 0.dp
     val footerReserve = seatsHeight + bannerHeight + gapBetweenBannerAndSeats + quipReserve + 12.dp
-
-    // Stable area for setup + optional punchline
     val setupAreaMinHeight = 200.dp
 
     // Delay banner quip until typing finishes
@@ -107,8 +165,16 @@ fun HomeScreen(
         }
     }
 
-    // Reset per-joke state when joke changes
+    // Reset per-joke state when the joke content changes
     LaunchedEffect(jokeState?.setup, jokeState?.punchline) {
+        isPunchlineRevealed = false
+        typingDone = false
+        bannerMood = StickMood.Idle
+        pendingBannerMood = null
+    }
+
+    // Local helper to reset transient UI state when navigating
+    val resetForNav: () -> Unit = {
         isPunchlineRevealed = false
         typingDone = false
         bannerMood = StickMood.Idle
@@ -117,31 +183,25 @@ fun HomeScreen(
 
     Box(Modifier.fillMaxSize()) {
 
-        // ===== Main content (centered in available space above footer) =====
+        // ===== Main content =====
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(
-                    top = 8.dp,
-                    bottom = footerReserve  // keep clear of footer overlay
-                ),
-            verticalArrangement = Arrangement.Center,    // ⬅️ center instead of top
+                .padding(top = 8.dp, bottom = footerReserve),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             jokeState?.let { joke ->
-                val (displaySetup, displayPunchline) = when {
-                    joke.setup.contains("?") -> joke.setup to joke.punchline
-                    joke.setup.contains(".") -> {
-                        val setup = joke.setup.substringBefore(".").trim() + "."
-                        val punch = joke.setup.substringAfter(".").trim()
-                        setup to punch
-                    }
-                    else -> joke.setup to joke.punchline
-                }
+                val apiPunch = joke.punchline.normalizeQuotesAndSpaces().trimStrayQuotes()
+                val (derivedSetup, derivedPunch) = deriveSetupAndPunchline(joke.setup)
 
-                // Stable region prevents bounce; sits closer to center now
+                val displaySetup = derivedSetup  // always use the cleaned/ensured setup
+                val displayPunchline = if (apiPunch.isNotBlank()) apiPunch else derivedPunch
+                // --- NEW: always derive from single API field (one-liner) ---
+//                val (displaySetup, displayPunchline) = deriveSetupAndPunchline(joke.setup)
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -210,12 +270,14 @@ fun HomeScreen(
                     }
                     IconButton(
                         onClick = {
+                            // Share derived setup + punchline (if present)
+                            val shareText = buildString {
+                                append(displaySetup)
+                                if (displayPunchline.isNotBlank()) append(" ").append(displayPunchline)
+                            }
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    "${joke.setup} ${if (joke.punchline.isNotBlank()) joke.punchline else ""}"
-                                )
+                                putExtra(Intent.EXTRA_TEXT, shareText)
                             }
                             context.startActivity(Intent.createChooser(intent, "Share this joke via:"))
                         }
@@ -228,41 +290,36 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(28.dp))   // ⬅️ slight nudge closer to center before buttons
+                Spacer(Modifier.height(28.dp))
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    enabled = viewModel.canGoBack(),
+                    enabled = canBack,
                     onClick = {
-                        isPunchlineRevealed = false
-                        typingDone = false
-                        bannerMood = StickMood.Idle
-                        pendingBannerMood = null
+                        resetForNav()
                         viewModel.showPreviousJoke()
                     }
                 ) { Text("Previous") }
 
                 Button(
                     onClick = {
-                        isPunchlineRevealed = false
-                        typingDone = false
-                        bannerMood = StickMood.Idle
-                        pendingBannerMood = null
-
+                        resetForNav()
                         nextTapCount += 1
                         val shouldStartAdFlow = adsEnabled && (nextTapCount % 5 == 0)
                         if (shouldStartAdFlow) {
                             navController.navigate(NavRoutes.AdPre.route)
                         } else {
-                            viewModel.fetchJoke()
+                            viewModel.showNextJoke()
                         }
                     }
-                ) { Text("Next Joke") }
+                ) {
+                    Text("Next Joke")
+                }
             }
         }
 
-        // ===== Footer: Banner -> Quip (min height) -> Seats =====
+        // ===== Footer: Banner -> Quip -> Seats =====
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -285,7 +342,6 @@ fun HomeScreen(
                 Spacer(Modifier.height(gapBetweenBannerAndSeats))
             }
 
-            // ⬅️ Was .height(...). Now .heightIn(min = quipReserve) so taller bubbles aren’t clipped.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -317,6 +373,8 @@ fun HomeScreen(
         )
     }
 }
+
+
 
 
 

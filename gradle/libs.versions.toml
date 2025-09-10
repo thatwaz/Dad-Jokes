@@ -17,6 +17,7 @@ kotlin = "1.9.0"
 kotlinxCoroutinesCore = "1.8.1"
 lifecycleRuntimeKtx = "2.6.2"
 material = "1.13.0"
+materialIconsExtended = "<compose_version>"
 navigation = "2.7.7"
 okhttp = "4.12.0"
 playServicesAds = "23.4.0"
@@ -36,6 +37,7 @@ androidx-hilt-common = { group = "androidx.hilt", name = "hilt-common", version.
 androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltCommon" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }

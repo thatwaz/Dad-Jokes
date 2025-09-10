@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Vault door outline (rounded via round joins) -->
+    <group
+        android:scaleX="0.88"
+        android:scaleY="0.88"
+        android:translateX="6.48"
+        android:translateY="6.48">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineJoin="round"
+        android:pathData="M24,24 L84,24 L84,84 L24,84 Z" />
+
+    <!-- Hinge bar (left) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineJoin="round"
+        android:pathData="M20,30 L24,30 L24,78 L20,78 Z" />
+
+    <!-- Hinge bolts (3 small filled circles) -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M22,36 m -2,0 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M22,54 m -2,0 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M22,72 m -2,0 a 2,2 0 1,0 4,0 a 2,2 0 1,0 -4,0" />
+
+    <!-- Dial outer ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M54,32 a22,22 0 1,0 0,44 a22,22 0 1,0 0,-44" />
+
+    <!-- Dial spokes -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:pathData="M54,36 L54,72"/>
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:pathData="M38,54 L70,54"/>
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:pathData="M43,43 L65,65"/>
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="6"
+        android:strokeLineCap="round" android:pathData="M65,43 L43,65"/>
+
+    <!-- Dial center hub -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M54,49 a5,5 0 1,0 0,10 a5,5 0 1,0 0,-10" />
+    </group>
+</vector>
+

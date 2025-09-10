@@ -20,9 +20,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.filled.StarRate
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -39,7 +43,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -62,30 +68,21 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) }
+        snackbarHost = { SnackbarHost(hostState = snackbar) }
     ) { padding ->
-        // Scrollable list with proper content padding
         androidx.compose.foundation.lazy.LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)            // ← from Scaffold
+                .padding(padding)
                 .padding(horizontal = 24.dp),
-            contentPadding = PaddingValues(
-                top = 16.dp,
-                bottom = 32.dp
-            ),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                Text("Settings", style = MaterialTheme.typography.headlineSmall)
-            }
+            item { Text("Settings", style = MaterialTheme.typography.headlineSmall) }
 
             // ——— Notifications ———
-            item {
-                Text("Notifications", style = MaterialTheme.typography.titleMedium)
-            }
+            item { Text("Notifications", style = MaterialTheme.typography.titleMedium) }
 
-            // Daily joke settings
             item {
                 ListItem(
                     headlineContent = { Text("Daily Joke Notification Settings") },
@@ -99,7 +96,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Send a test notification (and prompt to enable if disabled)
             item {
                 ListItem(
                     headlineContent = { Text("Send a test notification") },
@@ -113,7 +109,6 @@ fun SettingsScreen(
                                 openAppNotificationSettings(context)
                                 scope.launch { snackbar.showSnackbar("Enable notifications for DadJokes") }
                             } else {
-                                // Sends our local, hard-coded pool joke as a notification
                                 DailyJokeLocalNotifyWorker.enqueue(context)
                                 scope.launch { snackbar.showSnackbar("Test notification sent") }
                             }
@@ -125,9 +120,7 @@ fun SettingsScreen(
             item { HorizontalDivider() }
 
             // ——— Appearance ———
-            item {
-                Text("Appearance", style = MaterialTheme.typography.titleMedium)
-            }
+            item { Text("Appearance", style = MaterialTheme.typography.titleMedium) }
 
             item {
                 Row(
@@ -144,7 +137,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.width(16.dp)) // breathing room from the switch
+                    Spacer(Modifier.width(16.dp))
                     Switch(
                         checked = useDynamicColor,
                         onCheckedChange = { settingsViewModel.toggleDynamicColor() }
@@ -154,12 +147,40 @@ fun SettingsScreen(
 
             item { HorizontalDivider() }
 
-            // ——— Contribute ———
+            // ——— Upgrades (Coming soon) ———
+            item { Text("Upgrades", style = MaterialTheme.typography.titleMedium) }
+
+            // Remove ads (coming soon)
             item {
-                Text("Contribute", style = MaterialTheme.typography.titleMedium)
+                ComingSoonItem(
+                    title = "Remove ads",
+                    subtitle = "One-time purchase (coming soon)",
+                    icon = Icons.Outlined.Block
+                ) {
+                    scope.launch {
+                        snackbar.showSnackbar("Remove ads is coming soon in a future update.")
+                    }
+                }
             }
 
-            // Submit a joke (opens icanhazdadjoke.com/submit)
+            // Rate this app (coming soon)
+            item {
+                ComingSoonItem(
+                    title = "Rate this app",
+                    subtitle = "Coming soon",
+                    icon = Icons.Filled.StarRate
+                ) {
+                    scope.launch {
+                        snackbar.showSnackbar("Ratings will be available once the app is on Google Play.")
+                    }
+                }
+            }
+
+            item { HorizontalDivider() }
+
+            // ——— Contribute ———
+            item { Text("Contribute", style = MaterialTheme.typography.titleMedium) }
+
             item {
                 ListItem(
                     headlineContent = { Text("Submit a joke") },
@@ -173,7 +194,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Send us an ad quip (email)
             item {
                 ListItem(
                     headlineContent = { Text("Send us an ad quip") },
@@ -187,7 +207,6 @@ fun SettingsScreen(
                 )
             }
 
-            // Share the app (friends… or enemies 😈)
             item {
                 ListItem(
                     headlineContent = { Text("Share the app") },
@@ -196,7 +215,21 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { shareApp(context, playUrl = null) } // add Play URL later
+                        .clickable { shareApp(context, playUrl = null) }
+                        .padding(horizontal = 4.dp)
+                )
+            }
+
+            // View intro again
+            item {
+                ListItem(
+                    headlineContent = { Text("View intro / How it works") },
+                    supportingContent = { Text("See the Sticklerz tour again") },
+                    leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { navController.navigate(NavRoutes.Intro.route(force = true)) }
                         .padding(horizontal = 4.dp)
                 )
             }
@@ -204,11 +237,36 @@ fun SettingsScreen(
     }
 }
 
+/* ---------- Reusable Coming Soon row ---------- */
+@Composable
+private fun ComingSoonItem(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        leadingContent = { Icon(icon, contentDescription = null) },
+        trailingContent = {
+            AssistChip(onClick = {}, enabled = false, label = { Text("Coming soon") })
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .alpha(0.6f)                       // visually disabled
+            .clickable { onClick() }           // tap shows snackbar with context
+            .padding(horizontal = 4.dp)
+    )
+}
+
+
 
 
 /* ---------- Helpers ---------- */
 
-private const val DEV_EMAIL = "you@example.com" // TODO: replace
+private const val DEV_EMAIL = "brettwaz23@gmail.com" // TODO: replace
 
 private fun openCustomTab(context: Context, url: String) {
     try {

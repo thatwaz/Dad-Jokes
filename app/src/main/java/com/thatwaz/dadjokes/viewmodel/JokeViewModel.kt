@@ -44,8 +44,16 @@ class JokeViewModel @Inject constructor(
     private val _joke = MutableStateFlow<Joke?>(null)
     val joke: StateFlow<Joke?> = _joke.asStateFlow()
 
+    // Navigation state (history + index)
     private val jokeHistory = mutableListOf<Joke>()
     private var currentIndex = -1
+
+    // Button enablement as StateFlow for the UI
+    private val _canGoBack = MutableStateFlow(false)
+    val canGoBack: StateFlow<Boolean> = _canGoBack.asStateFlow()
+
+    private val _canGoForward = MutableStateFlow(false)
+    val canGoForward: StateFlow<Boolean> = _canGoForward.asStateFlow()
 
     // Keep your rated jokes list as-is
     val ratedJokes: Flow<List<Joke>> = repository.getRatedJokes()
@@ -63,32 +71,58 @@ class JokeViewModel @Inject constructor(
         viewModelScope.launch {
             // light housekeeping
             seenRepo.purgeOlderThan(ttlMillis)
+            fetchJoke() // loads first joke and seeds history
+        }
+    }
+
+    /** Public: Next/Previous API for the UI */
+
+    fun showPreviousJoke() {
+        if (currentIndex > 0) {
+            currentIndex--
+            _joke.value = jokeHistory[currentIndex]
+            updateNavFlags()
+        }
+    }
+
+    fun showNextJoke() {
+        // If there's a forward item in history, advance into it
+        if (currentIndex < jokeHistory.lastIndex) {
+            currentIndex++
+            _joke.value = jokeHistory[currentIndex]
+            updateNavFlags()
+        } else {
+            // Otherwise fetch a new one and append to history
             fetchJoke()
         }
     }
 
-    // inside JokeViewModel (add constructor param: private val cachedRepo: CachedJokesRepo)
+    /** Fetch a (new if possible) joke and push it onto history */
     fun fetchJoke() {
         viewModelScope.launch {
             try {
                 var last: Joke? = null
+
                 repeat(maxAttempts) {
                     val candidate = repository.getJoke()
                     last = candidate
 
-                    val id = stableJokeId(candidate.setup, candidate.punchline,
+                    val id = stableJokeId(
+                        candidate.setup,
+                        candidate.punchline,
                         candidate.id.toString()
                     )
+
                     val recentlySeen = seenRepo.wasSeenWithin(id, ttlMillis)
-// after you compute `id`
+
+                    // Cache every candidate (helps offline later)
                     cachedRepo.insert(
                         setup = candidate.setup,
                         punch = candidate.punchline,
                         apiId = candidate.id,
                         hash = id,
-                        type = candidate.type ?: "cached"   // or "single"/"twopart" if that fits your API
+                        type = candidate.type ?: "cached"
                     )
-
 
                     if (!recentlySeen) {
                         seenRepo.markSeen(id, keepCount)
@@ -110,75 +144,49 @@ class JokeViewModel @Inject constructor(
                 if (cached != null) {
                     val joke = Joke(
                         id = cached.apiId ?: 0,
-                        type = "cached",                 // 👈 add this (or "twopart"/"single" if that’s your API)
+                        type = "cached",
                         setup = cached.setup,
                         punchline = cached.punchline,
                         rating = 0
                     )
-
                     val id = cached.hash
                     seenRepo.markSeen(id, keepCount)
                     addToHistory(joke)
                 } else {
-                    // No cache available — you can show a snackbar/toast
                     Log.w("JokeViewModel", "No network and cache empty.")
                 }
             }
         }
     }
 
-
-//    fun fetchJoke() {
-//        viewModelScope.launch {
-//            try {
-//                var last: Joke? = null
-//                repeat(maxAttempts) {
-//                    val candidate = repository.getJoke()
-//                    last = candidate
-//
-//                    val id = stableJokeId(
-//                        setup = candidate.setup,
-//                        punchline = candidate.punchline,
-//                        apiId = candidate.id // if your Joke has an id; otherwise null is fine
-//                    )
-//
-//                    val recentlySeen = seenRepo.wasSeenWithin(id, ttlMillis)
-//                    if (!recentlySeen) {
-//                        seenRepo.markSeen(id, keepCount)
-//                        addToHistory(candidate)
-//                        return@launch
-//                    }
-//                }
-//
-//                // Fallback: accept the last pull so UX never stalls
-//                last?.let { fallback ->
-//                    val id = stableJokeId(fallback.setup, fallback.punchline, fallback.id)
-//                    seenRepo.markSeen(id, keepCount)
-//                    addToHistory(fallback)
-//                }
-//            } catch (e: Exception) {
-//                Log.e("JokeViewModel", "Error fetching joke: ${e.localizedMessage}")
-//            }
-//        }
-//    }
-
+    /** Append a joke as the new tail of history, trimming any forward items */
     private fun addToHistory(newJoke: Joke) {
+        // If we've navigated back in history, drop everything after the current index
         if (currentIndex < jokeHistory.lastIndex) {
             jokeHistory.subList(currentIndex + 1, jokeHistory.size).clear()
         }
-        jokeHistory.add(newJoke)
-        currentIndex++
-        _joke.value = newJoke
-    }
 
-    fun showPreviousJoke() {
-        if (canGoBack()) {
-            currentIndex--
+        // Avoid accidental adjacent duplicates (optional)
+        if (jokeHistory.lastOrNull()?.let { it.setup == newJoke.setup && it.punchline == newJoke.punchline } == true) {
+            // Even if same, move index to end to keep nav flags correct
+            currentIndex = jokeHistory.lastIndex
             _joke.value = jokeHistory[currentIndex]
+            updateNavFlags()
+            return
         }
+
+        jokeHistory.add(newJoke)
+        currentIndex = jokeHistory.lastIndex
+        _joke.value = newJoke
+        updateNavFlags()
     }
 
-    fun canGoBack(): Boolean = currentIndex > 0
+    private fun updateNavFlags() {
+        _canGoBack.value = currentIndex > 0
+        _canGoForward.value = currentIndex < jokeHistory.lastIndex
+    }
+
+    /** Rating + Save flows (unchanged) */
 
     fun rateCurrentJoke(rating: Int) {
         _joke.value = _joke.value?.copy(rating = rating)?.also { updated ->
@@ -186,7 +194,6 @@ class JokeViewModel @Inject constructor(
         }
     }
 
-    // Save-to-people (unchanged)
     fun saveJokeToPeople(joke: Joke, people: List<String>) {
         if (people.isEmpty()) return
         viewModelScope.launch {
@@ -225,6 +232,18 @@ class JokeViewModel @Inject constructor(
         }
     }
 
+    fun deleteRatedJoke(joke: Joke) {
+        viewModelScope.launch {
+            repository.deleteRating(joke)
+        }
+    }
+
+    fun clearAllRatedJokes() {
+        viewModelScope.launch {
+            repository.clearAllRatings()
+        }
+    }
+
     // Notifications (unchanged)
     @RequiresApi(Build.VERSION_CODES.O)
     fun saveNotificationTime(time: LocalTime) {
@@ -254,6 +273,7 @@ class JokeViewModel @Inject constructor(
         )
     }
 }
+
 
 
 //@HiltViewModel
