@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Jokes Vault</string>        <!-- launcher label -->
+    <string name="app_name">Dad Jokes Vault</string>        <!-- launcher label -->
     <string name="marketing_title">Dad Jokes Vault</string> <!-- optional: use in About/Settings -->
 
     <string name="cd_intro_dads">

@@ -26,7 +26,6 @@ object NetworkModule {
     fun provideOkHttpClient(
         @ApplicationContext context: Context
     ): OkHttpClient {
-        // Version name without BuildConfig
         val versionName = try {
             val pm = context.packageManager
             val pkg = context.packageName
@@ -34,9 +33,7 @@ object NetworkModule {
             pm.getPackageInfo(pkg, 0).versionName ?: "1.0"
         } catch (_: Exception) { "1.0" }
 
-        // Is debug build without BuildConfig
         val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
         val userAgent = "Dad Jokes Vault/$versionName (support@yourapp.com)"
 
         val headerInterceptor = Interceptor { chain ->
@@ -56,6 +53,7 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(headerInterceptor)
             .addInterceptor(logging)
+            .eventListenerFactory { NetEvents() }   // ← hook up the event logs
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
@@ -72,7 +70,21 @@ object NetworkModule {
     @Provides @Singleton
     fun provideJokeApiService(retrofit: Retrofit): JokeApiService =
         retrofit.create(JokeApiService::class.java)
+
+    // Nested class is fine since we reference it via .eventListenerFactory { NetEvents() }
+    class NetEvents : okhttp3.EventListener() {
+        override fun callStart(call: okhttp3.Call) {
+            android.util.Log.d("Net", "callStart ${call.request().method} ${call.request().url}")
+        }
+        override fun callEnd(call: okhttp3.Call) {
+            android.util.Log.d("Net", "callEnd")
+        }
+        override fun callFailed(call: okhttp3.Call, ioe: java.io.IOException) {
+            android.util.Log.d("Net", "callFailed: ${ioe.message}")
+        }
+    }
 }
+
 
 
 

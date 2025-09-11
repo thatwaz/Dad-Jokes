@@ -17,7 +17,7 @@ import com.thatwaz.dadjokes.domain.model.Joke
 import com.thatwaz.dadjokes.domain.model.SavedJokeDelivery
 import com.thatwaz.dadjokes.domain.repository.SavedJokeRepository
 import com.thatwaz.dadjokes.notification.DailyJokeReceiver
-import com.thatwaz.dadjokes.ui.util.stableJokeId
+import com.thatwaz.dadjokes.ui.util.dedupeKey
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,67 +97,132 @@ class JokeViewModel @Inject constructor(
         }
     }
 
-    /** Fetch a (new if possible) joke and push it onto history */
+    /** Fetch one joke (one call) and push onto history with de-dupe. */
+
+
     fun fetchJoke() {
         viewModelScope.launch {
+            val cutoff = System.currentTimeMillis() - ttlMillis
+            Log.d("JokeVM", "Next tapped → fetch one joke")
+
             try {
-                var last: Joke? = null
+                val candidate = repository.getJokeSingleCall()
+                Log.d("JokeVM", "Got network joke (type=${candidate.type})")
 
-                repeat(maxAttempts) {
-                    val candidate = repository.getJoke()
-                    last = candidate
+                val key = dedupeKey(candidate.setup, candidate.punchline)
+                val recentlySeen = seenRepo.wasSeenWithin(key, ttlMillis)
+                Log.d("JokeVM", "recentlySeen=$recentlySeen")
 
-                    val id = stableJokeId(
-                        candidate.setup,
-                        candidate.punchline,
-                        candidate.id.toString()
-                    )
-
-                    val recentlySeen = seenRepo.wasSeenWithin(id, ttlMillis)
-
-                    // Cache every candidate (helps offline later)
-                    cachedRepo.insert(
-                        setup = candidate.setup,
-                        punch = candidate.punchline,
-                        apiId = candidate.id,
-                        hash = id,
-                        type = candidate.type ?: "cached"
-                    )
-
-                    if (!recentlySeen) {
-                        seenRepo.markSeen(id, keepCount)
-                        addToHistory(candidate)
-                        return@launch
-                    }
+                if (!recentlySeen) {
+                    seenRepo.markSeen(key, keepCount)
+                    addToHistory(candidate)
+                    Log.d("JokeVM", "Showing fresh network joke")
+                    return@launch
                 }
 
-                // If all attempts were repeats, accept last (still cached above)
-                last?.let {
-                    val id = stableJokeId(it.setup, it.punchline, it.id.toString())
-                    seenRepo.markSeen(id, keepCount)
-                    addToHistory(it)
-                }
-            } catch (e: Exception) {
-                // Network failed — fallback to cache
-                val cutoff = System.currentTimeMillis() - ttlMillis
+                // Duplicate → try unseen cache
                 val cached = cachedRepo.pickUnseen(cutoff)
                 if (cached != null) {
-                    val joke = Joke(
-                        id = cached.apiId ?: 0,
-                        type = "cached",
-                        setup = cached.setup,
-                        punchline = cached.punchline,
-                        rating = 0
+                    seenRepo.markSeen(cached.hash, keepCount)
+                    addToHistory(
+                        Joke(
+                            id        = cached.apiId ?: cached.hash.hashCode(),
+                            type      = cached.type ?: "cached",
+                            setup     = cached.setup,
+                            punchline = cached.punchline,
+                            rating    = 0
+                        )
                     )
-                    val id = cached.hash
-                    seenRepo.markSeen(id, keepCount)
-                    addToHistory(joke)
+                    Log.d("JokeVM", "Duplicate → served cached unseen")
                 } else {
-                    Log.w("JokeViewModel", "No network and cache empty.")
+                    seenRepo.markSeen(key, keepCount)
+                    addToHistory(candidate)
+                    Log.d("JokeVM", "Duplicate and no unseen cache → accepted repeat")
+                }
+            } catch (e: Exception) {
+                val cached = cachedRepo.pickUnseen(cutoff) ?: cachedRepo.pickAny()
+                if (cached != null) {
+                    seenRepo.markSeen(cached.hash, keepCount)
+                    addToHistory(
+                        Joke(
+                            id        = cached.apiId ?: cached.hash.hashCode(),
+                            type      = cached.type ?: "cached",
+                            setup     = cached.setup,
+                            punchline = cached.punchline,
+                            rating    = 0
+                        )
+                    )
+                    Log.w("JokeVM", "Offline/failure → served from cache")
+                } else {
+                    Log.w("JokeVM", "No network and cache empty.")
                 }
             }
         }
     }
+
+
+
+//    /** Fetch a (new if possible) joke and push it onto history */
+//    fun fetchJoke() {
+//        viewModelScope.launch {
+//            try {
+//                var last: Joke? = null
+//
+//                repeat(maxAttempts) {
+//                    val candidate = repository.getJoke()
+//                    last = candidate
+//
+//                    val id = stableJokeId(
+//                        candidate.setup,
+//                        candidate.punchline,
+//                        candidate.id.toString()
+//                    )
+//
+//                    val recentlySeen = seenRepo.wasSeenWithin(id, ttlMillis)
+//
+//                    // Cache every candidate (helps offline later)
+//                    cachedRepo.insert(
+//                        setup = candidate.setup,
+//                        punch = candidate.punchline,
+//                        apiId = candidate.id,
+//                        hash = id,
+//                        type = candidate.type ?: "cached"
+//                    )
+//
+//                    if (!recentlySeen) {
+//                        seenRepo.markSeen(id, keepCount)
+//                        addToHistory(candidate)
+//                        return@launch
+//                    }
+//                }
+//
+//                // If all attempts were repeats, accept last (still cached above)
+//                last?.let {
+//                    val id = stableJokeId(it.setup, it.punchline, it.id.toString())
+//                    seenRepo.markSeen(id, keepCount)
+//                    addToHistory(it)
+//                }
+//            } catch (e: Exception) {
+//                // Network failed — fallback to cache
+//                val cutoff = System.currentTimeMillis() - ttlMillis
+//                val cached = cachedRepo.pickUnseen(cutoff)
+//                if (cached != null) {
+//                    val joke = Joke(
+//                        id = cached.apiId ?: 0,
+//                        type = "cached",
+//                        setup = cached.setup,
+//                        punchline = cached.punchline,
+//                        rating = 0
+//                    )
+//                    val id = cached.hash
+//                    seenRepo.markSeen(id, keepCount)
+//                    addToHistory(joke)
+//                } else {
+//                    Log.w("JokeViewModel", "No network and cache empty.")
+//                }
+//            }
+//        }
+//    }
 
     /** Append a joke as the new tail of history, trimming any forward items */
     private fun addToHistory(newJoke: Joke) {

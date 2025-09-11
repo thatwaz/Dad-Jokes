@@ -6,6 +6,7 @@ import com.thatwaz.dadjokes.data.db.JokeDao
 import com.thatwaz.dadjokes.domain.model.Joke
 import com.thatwaz.dadjokes.domain.model.toEntity
 import com.thatwaz.dadjokes.domain.model.toJoke
+import com.thatwaz.dadjokes.ui.util.dedupeKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -21,6 +22,42 @@ class JokeRepository @Inject constructor(
 //        val cached = dao.getJokeById(jokeDto.id.toString())
 //        return cached?.toJoke() ?: jokeDto.toJoke()
 //    }
+
+    suspend fun getJokeSingleCall(): Joke {
+        return runCatching {
+            // ONE network call
+            val dto  = api.getRandomJoke()
+            val joke = dto.toJoke() // id:Int, type:String, setup, punchline
+
+            // cache using a text-only dedupe key
+            val hash = dedupeKey(joke.setup, joke.punchline)
+            cachedRepo.insert(
+                setup = joke.setup,
+                punch = joke.punchline,
+                apiId = joke.id,
+                hash  = hash,
+                type  = joke.type
+            )
+
+            joke
+        }.getOrElse {
+            // Offline / failure → serve from cache (prefer “recent unseen”)
+            val twoWeeksAgo = System.currentTimeMillis() - 14L * 24 * 60 * 60 * 1000
+            val cached = cachedRepo.pickUnseen(twoWeeksAgo) ?: cachedRepo.pickAny()
+            ?: error("No cached jokes available yet — open online once to prefill cache")
+
+            // Rebuild domain from cache
+            Joke(
+                id         = cached.apiId ?: cached.hash.hashCode(),
+                type       = cached.type ?: "cached",
+                setup      = cached.setup,
+                punchline  = cached.punchline,
+                rating     = 0,
+                isFavorite = false
+            )
+        }
+    }
+
 
     suspend fun getJoke(): Joke {
         return runCatching {

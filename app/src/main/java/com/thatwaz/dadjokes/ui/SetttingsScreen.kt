@@ -224,7 +224,7 @@ fun SettingsScreen(
             item {
                 ListItem(
                     headlineContent = { Text("View intro / How it works") },
-                    supportingContent = { Text("See the Sticklerz tour again") },
+                    supportingContent = { Text("See the Dad's tour again") },
                     leadingContent = { Icon(Icons.Outlined.Info, contentDescription = null) },
                     modifier = Modifier
                         .fillMaxWidth()
