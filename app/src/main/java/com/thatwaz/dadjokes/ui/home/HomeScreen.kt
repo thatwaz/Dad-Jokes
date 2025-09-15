@@ -128,10 +128,13 @@ fun HomeScreen(
     val canBack by viewModel.canGoBack.collectAsState()
     val canForward by viewModel.canGoForward.collectAsState()
 
+    // First joke on screen entry  ----------------------------- NEW
+    LaunchedEffect(Unit) { viewModel.loadNext() }
+
     // Footer quips are banner-only
     var bannerMood by remember { mutableStateOf(StickMood.Idle) }
 
-    // After AdPost returns, advance using viewModel.showNextJoke()
+    // After AdPost returns, advance using loadNext() ---------- CHANGED
     val afterAdFetchFlow = navController.currentBackStackEntry
         ?.savedStateHandle
         ?.getStateFlow("afterAdFetch", false)
@@ -139,7 +142,7 @@ fun HomeScreen(
     LaunchedEffect(afterAdFetch) {
         if (afterAdFetch) {
             navController.currentBackStackEntry?.savedStateHandle?.set("afterAdFetch", false)
-            viewModel.showNextJoke()
+            viewModel.loadNext() // was showNextJoke()
         }
     }
 
@@ -197,10 +200,8 @@ fun HomeScreen(
                 val apiPunch = joke.punchline.normalizeQuotesAndSpaces().trimStrayQuotes()
                 val (derivedSetup, derivedPunch) = deriveSetupAndPunchline(joke.setup)
 
-                val displaySetup = derivedSetup  // always use the cleaned/ensured setup
+                val displaySetup = derivedSetup
                 val displayPunchline = if (apiPunch.isNotBlank()) apiPunch else derivedPunch
-                // --- NEW: always derive from single API field (one-liner) ---
-//                val (displaySetup, displayPunchline) = deriveSetupAndPunchline(joke.setup)
 
                 Box(
                     modifier = Modifier
@@ -270,7 +271,6 @@ fun HomeScreen(
                     }
                     IconButton(
                         onClick = {
-                            // Share derived setup + punchline (if present)
                             val shareText = buildString {
                                 append(displaySetup)
                                 if (displayPunchline.isNotBlank()) append(" ").append(displayPunchline)
@@ -310,7 +310,7 @@ fun HomeScreen(
                         if (shouldStartAdFlow) {
                             navController.navigate(NavRoutes.AdPre.route)
                         } else {
-                            viewModel.showNextJoke()
+                            viewModel.loadNext() // was showNextJoke()  ---- CHANGED
                         }
                     }
                 ) {
@@ -373,6 +373,7 @@ fun HomeScreen(
         )
     }
 }
+
 
 
 

@@ -2,6 +2,7 @@ package com.thatwaz.dadjokes.di
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.util.Log
 import com.thatwaz.dadjokes.data.api.JokeApiService
 import dagger.Module
 import dagger.Provides
@@ -16,7 +17,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
-private const val BASE_URL = "https://icanhazdadjoke.com/"
+private const val BASE_URL = "https://v2.jokeapi.dev/"
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -26,7 +27,6 @@ object NetworkModule {
     fun provideOkHttpClient(
         @ApplicationContext context: Context
     ): OkHttpClient {
-        // Version name without BuildConfig
         val versionName = try {
             val pm = context.packageManager
             val pkg = context.packageName
@@ -34,9 +34,7 @@ object NetworkModule {
             pm.getPackageInfo(pkg, 0).versionName ?: "1.0"
         } catch (_: Exception) { "1.0" }
 
-        // Is debug build without BuildConfig
         val isDebug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
         val userAgent = "Dad Jokes Vault/$versionName (support@yourapp.com)"
 
         val headerInterceptor = Interceptor { chain ->
@@ -48,6 +46,15 @@ object NetworkModule {
             )
         }
 
+        // ✅ Add this: simple host/URL logger
+        val hostLog = Interceptor { chain ->
+            val req = chain.request()
+            Log.d("MAMBY", "→ ${req.method} ${req.url}")       // should show v2.jokeapi.dev
+            val resp = chain.proceed(req)
+            Log.d("MAMBY", "← ${resp.code} ${resp.request.url.host}")
+            resp
+        }
+
         val logging = HttpLoggingInterceptor().apply {
             level = if (isDebug) HttpLoggingInterceptor.Level.BODY
             else HttpLoggingInterceptor.Level.NONE
@@ -55,6 +62,7 @@ object NetworkModule {
 
         return OkHttpClient.Builder()
             .addInterceptor(headerInterceptor)
+            .addInterceptor(hostLog)      // ✅ place BEFORE the verbose body logger
             .addInterceptor(logging)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
@@ -62,17 +70,23 @@ object NetworkModule {
     }
 
     @Provides @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit =
-        Retrofit.Builder()
+    fun provideRetrofit(client: OkHttpClient): Retrofit {
+        val rt = Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
+        // ✅ Log once at startup to confirm base URL
+        Log.d("Net", "Retrofit baseUrl=${rt.baseUrl()}")     // → https://v2.jokeapi.dev/
+        return rt
+    }
 
     @Provides @Singleton
     fun provideJokeApiService(retrofit: Retrofit): JokeApiService =
         retrofit.create(JokeApiService::class.java)
 }
+
+
 
 
 

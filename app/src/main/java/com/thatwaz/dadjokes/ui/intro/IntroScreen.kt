@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -53,7 +54,6 @@ fun IntroScreen(
     onComplete: () -> Unit,
     hasOnboarded: Boolean
 ) {
-    // If they’ve already seen it, skip immediately
     LaunchedEffect(hasOnboarded) {
         if (hasOnboarded) {
             navController.navigate(NavRoutes.Home.route) {
@@ -68,11 +68,8 @@ fun IntroScreen(
     val scope = rememberCoroutineScope()
 
     BackHandler {
-        if (pager.currentPage > 0) {
-            scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
-        } else {
-            navController.popBackStack()
-        }
+        if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }
+        else navController.popBackStack()
     }
 
     Scaffold(
@@ -98,7 +95,6 @@ fun IntroScreen(
                 .systemBarsPadding(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-
             // PAGES
             HorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
                 when (page) {
@@ -111,15 +107,7 @@ fun IntroScreen(
                             "Rate jokes to train your Vault"
                         )
                     )
-                    1 -> IntroPage(
-                        title = "Meet the Dads",
-                        subtitle = "Two armchair critics who riff on ads.",
-                        bullets = listOf(
-                            "Banner at the bottom is their ‘screen’",
-                            "They poke quips at ads so you don’t have to",
-                            "Interstitials every few jokes (Remove ads — coming soon)"
-                        )
-                    )
+                    1 -> MeetTheDadsPage() // 👈 special page with bigger art + quip
                     else -> IntroPage(
                         title = "You’re in control",
                         subtitle = "Keep notifications optional, submit jokes, send ad quips.",
@@ -131,18 +119,6 @@ fun IntroScreen(
                     )
                 }
             }
-
-            // THEATER ART (PNG)
-            Image(
-                painter = painterResource(R.drawable.intro_dads_theater),
-                contentDescription = stringResource(R.string.cd_intro_dads),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .padding(bottom = 12.dp),
-                // Tint line art so it shows on light *and* dark backgrounds
-                colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
-            )
 
             // CONTROLS
             Row(
@@ -167,14 +143,10 @@ fun IntroScreen(
                         )
                     }
                 }
-
                 Button(
                     onClick = {
-                        if (pager.currentPage < 2) {
-                            scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
-                        } else {
-                            onComplete()
-                        }
+                        if (pager.currentPage < 2) scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }
+                        else onComplete()
                     }
                 ) { Text(if (pager.currentPage < 2) "Next" else "Start jokin’") }
             }
@@ -207,6 +179,61 @@ private fun IntroPage(
             modifier = Modifier.fillMaxWidth(0.94f)
         ) {
             bullets.forEach { b -> Text("• $b", style = MaterialTheme.typography.bodyLarge) }
+        }
+    }
+}
+
+/** Page 2: bigger dads art + cheeky quip */
+@Composable
+private fun MeetTheDadsPage() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Meet the Dads", style = MaterialTheme.typography.headlineLarge, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Two armchair critics who riff on ads.",
+            style = MaterialTheme.typography.titleMedium.copy(fontStyle = FontStyle.Italic),
+            textAlign = TextAlign.Center
+        )
+
+        // Funny quip about the "art department"
+        Spacer(Modifier.height(10.dp))
+        Text(
+            // add this to strings.xml if you prefer localization
+            text = "Art department update: budget blown on popcorn. Please set expectations accordingly.",
+            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+        )
+
+        // Bigger image
+        Spacer(Modifier.height(12.dp))
+        Image(
+            painter = painterResource(R.drawable.intro_dads_theater),
+            contentDescription = stringResource(R.string.cd_intro_dads),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp),            // ⬅️ bigger
+            contentScale = ContentScale.Fit,
+            // Tint so black line art stays visible on light & dark themes
+            colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onSurface)
+        )
+
+        Spacer(Modifier.height(16.dp))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(0.94f)
+        ) {
+            Text("• Banner at the bottom is their ‘screen’", style = MaterialTheme.typography.bodyLarge)
+            Text("• They poke quips at ads so you don’t have to", style = MaterialTheme.typography.bodyLarge)
+            Text("• Interstitials every few jokes (Remove ads — coming soon)", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

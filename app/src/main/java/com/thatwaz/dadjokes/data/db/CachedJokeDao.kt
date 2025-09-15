@@ -31,6 +31,9 @@ interface CachedJokeDao {
     @Query("SELECT * FROM cached_jokes ORDER BY RANDOM() LIMIT 1")
     suspend fun pickAny(): CachedJokeEntity?
 
+    @Query("DELETE FROM cached_jokes") suspend fun clearCached()
+
+// call it once from a debug action / App.onCreate (dev builds)
 
 
 }

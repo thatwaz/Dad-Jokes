@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         SeenJoke::class,
         CachedJokeEntity::class     // 👈 add
     ],
-    version = 5,                    // 👈 bump (you used fallbackToDestructiveMigration)
+    version = 6,                    // 👈 bump (you used fallbackToDestructiveMigration)
     exportSchema = false
 )
 abstract class JokeDatabase : RoomDatabase() {
