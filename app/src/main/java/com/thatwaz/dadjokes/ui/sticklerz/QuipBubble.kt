@@ -6,10 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -19,7 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,7 +29,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // If StickMood already lives in its own file, delete this duplicate.
-enum class StickMood { Idle, BannerLoaded, BannerFailed, InterstitialReady, InterstitialShown, InterstitialDismissed, Clicked }
+//enum class StickMood { Idle, BannerLoaded, BannerFailed, InterstitialReady, InterstitialShown, InterstitialDismissed, Clicked }
+enum class StickMood {
+    Idle,
+    BannerLoaded, BannerFailed,
+    InterstitialReady, InterstitialShown, InterstitialDismissed,
+    Clicked,
+    // NEW
+    BatchFirst, BatchThird
+}
+
 
 @Composable
 fun QuipBubble(
@@ -36,7 +47,7 @@ fun QuipBubble(
     showMs: Long = 8_000L,
     allowed: Set<StickMood> = emptySet(),
 
-    // ✨ Styling knobs (theme-aware defaults)
+    // styling
     containerColor: Color = MaterialTheme.colorScheme.tertiaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onTertiaryContainer,
     borderColor: Color = MaterialTheme.colorScheme.primary,
@@ -55,10 +66,8 @@ fun QuipBubble(
             line = picked
             visible = true
             kotlinx.coroutines.delay(showMs)
-            visible = false
-        } else {
-            visible = false
         }
+        visible = false
     }
 
     AnimatedVisibility(
@@ -70,27 +79,39 @@ fun QuipBubble(
         Surface(
             color = containerColor,
             contentColor = contentColor,
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.medium,
             tonalElevation = elevation,
             shadowElevation = elevation,
             border = BorderStroke(1.dp, borderColor.copy(alpha = 0.35f)),
             modifier = Modifier
                 .padding(horizontal = 12.dp)
-                .heightIn(min = 44.dp) // 👈 never too short
+                .fillMaxWidth()
+                .fillMaxHeight()      // occupy the fixed-height slot from parent
+                .clipToBounds()
         ) {
-            Text(
-                text = line,
-                style = MaterialTheme.typography.titleSmall, // bigger than body
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            Box(
                 modifier = Modifier
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
                     .fillMaxWidth()
-            )
+                    .fillMaxHeight()
+                    .clipToBounds(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.titleSmall,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,                 // ⬅️ up to three lines
+                    softWrap = true,              // wrap instead of scrolling
+                    overflow = TextOverflow.Clip, // ⬅️ no ellipsis
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
         }
     }
 }
+
 
 
 //@Composable

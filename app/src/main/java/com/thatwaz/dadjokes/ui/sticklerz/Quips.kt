@@ -256,6 +256,8 @@ object Quips {
         StickMood.InterstitialReady -> interstitialReady.randomOrNull()
         StickMood.InterstitialShown -> interstitialShown.randomOrNull()
         StickMood.InterstitialDismissed -> interstitialDismissed.randomOrNull()
+        StickMood.BatchFirst -> bannerLoaded.randomOrNull()
+        StickMood.BatchThird -> bannerLoaded.randomOrNull()
         StickMood.Clicked, StickMood.Idle -> null
     }
 

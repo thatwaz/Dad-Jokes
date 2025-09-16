@@ -17,8 +17,10 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -40,72 +42,6 @@ import com.thatwaz.dadjokes.ui.sticklerz.StickMood
 import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmen
 import com.thatwaz.dadjokes.ui.sticklerz.TheaterStickmenImage
 
-private fun String.normalizeQuotesAndSpaces(): String = this
-    .replace('“', '"').replace('”', '"')
-    .replace('‘', '\'').replace('’', '\'')
-    // normalize weird spaces (NBSP, thin/narrow spaces)
-    .replace('\u00A0', ' ')
-    .replace('\u202F', ' ')
-    .replace('\u2009', ' ')
-    .replace('\u200A', ' ')
-    .replace('\u2007', ' ')
-    .trim()
-
-private fun String.trimStrayQuotes(): String =
-    this.trim().trim('"', '\'', '“', '”', '‘', '’', ')', ']', '}').trim()
-
-private fun String.ensureEndsWithSentencePunct(): String =
-    if (isEmpty()) this else if (last() in ".!?") this else this + "."
-
-
-// --- The splitter: returns (setup, punchline) ---
-private fun deriveSetupAndPunchline(raw: String): Pair<String, String> {
-    val t = raw.normalizeQuotesAndSpaces()
-
-    // 1) Explicit separators first (most reliable for one-liners)
-    val seps = listOf("\n\n", "\n", " — ", " – ", " - ", "—", "–", ": ")
-    for (sep in seps) {
-        val idx = t.indexOf(sep)
-        if (idx >= 0) {
-            val left  = t.substring(0, idx).trim().ensureEndsWithSentencePunct()
-            val right = t.substring(idx + sep.length).trimStrayQuotes()
-            if (right.isNotBlank()) return left to right
-        }
-    }
-
-    // 2) Sentence boundary:
-    //    Split after the FIRST . ? !, allowing optional quotes/parens and ZERO OR MORE spaces
-    //    Examples handled:
-    //      "Why ...?Because ..."       (no space)
-    //      "Why ...?\" Because ..."    (closing quote then space)
-    //      "Why ...!  Then ..."        (multiple spaces)
-    val m = Regex("""^(.+?[.?!])\s*["'”’)\]]*\s*(.+)$""").find(t)
-    if (m != null) {
-        val left  = m.groupValues[1].trim().ensureEndsWithSentencePunct()
-        val right = m.groupValues[2].trimStrayQuotes()
-        if (right.isNotBlank()) return left to right
-    }
-
-    // 3) (Optional extra safety) If we still didn't split, try a raw '?' without spaces.
-    val q = t.indexOf('?')
-    if (q >= 0 && q + 1 < t.length) {
-        val left  = t.substring(0, q + 1).trim().ensureEndsWithSentencePunct()
-        val right = t.substring(q + 1).trimStrayQuotes()
-        if (right.isNotBlank()) return left to right
-    }
-
-    // 4) No reasonable split → treat as single line (no reveal)
-    return t.ensureEndsWithSentencePunct() to ""
-}
-
-
-private tailrec fun Context.findActivity(): Activity? =
-    when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
-    }
-
 @RequiresApi(35)
 @Composable
 fun HomeScreen(
@@ -117,71 +53,70 @@ fun HomeScreen(
     val adsEnabled by billingVM.adsEnabled.collectAsState(initial = true)
 
     val context = LocalContext.current
-    val activity = remember { context.findActivity() }
 
     var isPunchlineRevealed by remember { mutableStateOf(false) }
     var typingDone by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
     val existingPeople by viewModel.peopleNames.collectAsState()
 
-    // StateFlow flags
     val canBack by viewModel.canGoBack.collectAsState()
     val canForward by viewModel.canGoForward.collectAsState()
 
-    // First joke on screen entry  ----------------------------- NEW
-    LaunchedEffect(Unit) { viewModel.loadNext() }
-
-    // Footer quips are banner-only
+    // ---- banner quips ----
     var bannerMood by remember { mutableStateOf(StickMood.Idle) }
-
-    // After AdPost returns, advance using loadNext() ---------- CHANGED
-    val afterAdFetchFlow = navController.currentBackStackEntry
-        ?.savedStateHandle
-        ?.getStateFlow("afterAdFetch", false)
-    val afterAdFetch by (afterAdFetchFlow?.collectAsState() ?: remember { mutableStateOf(false) })
-    LaunchedEffect(afterAdFetch) {
-        if (afterAdFetch) {
-            navController.currentBackStackEntry?.savedStateHandle?.set("afterAdFetch", false)
-            viewModel.loadNext() // was showNextJoke()
-        }
-    }
-
-    // Count Next taps to trigger ad flow every 5
-    var nextTapCount by remember { mutableStateOf(0) }
-
-    // ---- layout constants ----
-    val seatsHeight = 80.dp
-    val gapBetweenBannerAndSeats = 16.dp
-    val quipReserve = 48.dp
-    val bannerHeight = if (adsEnabled) 50.dp else 0.dp
-    val footerReserve = seatsHeight + bannerHeight + gapBetweenBannerAndSeats + quipReserve + 12.dp
-    val setupAreaMinHeight = 200.dp
-
-    // Delay banner quip until typing finishes
     var pendingBannerMood by remember { mutableStateOf<StickMood?>(null) }
+
+    // apply pending mood once typing finishes
     LaunchedEffect(typingDone, pendingBannerMood) {
-        val m = pendingBannerMood
-        if (typingDone && m != null) {
-            kotlinx.coroutines.delay(900)
-            bannerMood = m
-            pendingBannerMood = null
+        pendingBannerMood?.let { m ->
+            if (typingDone) {
+                kotlinx.coroutines.delay(900)
+                bannerMood = m
+                pendingBannerMood = null
+            }
         }
     }
 
-    // Reset per-joke state when the joke content changes
+    // ---- cycle counter (1..5) used for interstitial + quips ----
+    var jokesInCycle by rememberSaveable { mutableStateOf(0) }
+
+    // helper to set quip for the current position in 5-pack
+    fun setQuipForCycle(pos: Int) {
+        val mood = when (pos) {
+            1 -> StickMood.BatchFirst
+            3 -> StickMood.BatchThird
+            else -> StickMood.Idle
+        }
+        if (typingDone) bannerMood = mood else pendingBannerMood = mood
+    }
+
+    // first load counts as #1 in the cycle
+    LaunchedEffect(Unit) {
+        jokesInCycle = 1
+        viewModel.loadNext()
+        setQuipForCycle(1)
+    }
+
+    // reset per-joke UI when content changes
     LaunchedEffect(jokeState?.setup, jokeState?.punchline) {
         isPunchlineRevealed = false
         typingDone = false
-        bannerMood = StickMood.Idle
-        pendingBannerMood = null
+        // keep current/pending mood; it’s set by setQuipForCycle()
     }
 
-    // Local helper to reset transient UI state when navigating
+    // ---- layout constants ----
+    val seatsHeight = 132.dp          // ⬅️ a little bigger
+    val gapBetweenBannerAndSeats = 16.dp
+    val quipHeight = 80.dp            // fixed height; prevents banner shifting
+    val bannerHeight = if (adsEnabled) 50.dp else 0.dp
+    val footerReserve = seatsHeight + bannerHeight + gapBetweenBannerAndSeats + quipHeight + 12.dp
+    val setupAreaMinHeight = 200.dp
+
+    // local helper to reset transient UI bits on navigation
     val resetForNav: () -> Unit = {
         isPunchlineRevealed = false
         typingDone = false
-        bannerMood = StickMood.Idle
-        pendingBannerMood = null
+        // bannerMood/pending set by setQuipForCycle()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -197,11 +132,8 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             jokeState?.let { joke ->
-                val apiPunch = joke.punchline.normalizeQuotesAndSpaces().trimStrayQuotes()
-                val (derivedSetup, derivedPunch) = deriveSetupAndPunchline(joke.setup)
-
-                val displaySetup = derivedSetup
-                val displayPunchline = if (apiPunch.isNotBlank()) apiPunch else derivedPunch
+                val displaySetup = joke.setup.trim()
+                val displayPunchline = joke.punchline.trim()
 
                 Box(
                     modifier = Modifier
@@ -299,18 +231,23 @@ fun HomeScreen(
                     onClick = {
                         resetForNav()
                         viewModel.showPreviousJoke()
+                        // don’t change cycle on back
                     }
                 ) { Text("Previous") }
 
                 Button(
                     onClick = {
                         resetForNav()
-                        nextTapCount += 1
-                        val shouldStartAdFlow = adsEnabled && (nextTapCount % 5 == 0)
+
+                        // advance cycle (1..5), wrap after 5
+                        jokesInCycle = if (jokesInCycle >= 5) 1 else jokesInCycle + 1
+
+                        val shouldStartAdFlow = adsEnabled && (jokesInCycle == 5)
                         if (shouldStartAdFlow) {
                             navController.navigate(NavRoutes.AdPre.route)
                         } else {
-                            viewModel.loadNext() // was showNextJoke()  ---- CHANGED
+                            viewModel.loadNext()
+                            setQuipForCycle(jokesInCycle) // quip on 1st and 3rd
                         }
                     }
                 ) {
@@ -319,7 +256,7 @@ fun HomeScreen(
             }
         }
 
-        // ===== Footer: Banner -> Quip -> Seats =====
+        // ===== Footer: Banner -> Quip (fixed height) -> Seats =====
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -342,21 +279,30 @@ fun HomeScreen(
                 Spacer(Modifier.height(gapBetweenBannerAndSeats))
             }
 
+            // fixed-height container => no banner jump
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = quipReserve),
+                    .height(quipHeight)
+                    .clipToBounds(),
                 contentAlignment = Alignment.Center
             ) {
                 QuipBubble(
                     mood = bannerMood,
-                    allowed = setOf(StickMood.BannerLoaded, StickMood.BannerFailed, StickMood.Clicked)
+                    allowed = setOf(
+                        StickMood.BannerLoaded,
+                        StickMood.BannerFailed,
+                        StickMood.Clicked,
+                        StickMood.BatchFirst,   // ⬅️ new
+                        StickMood.BatchThird    // ⬅️ new
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
             TheaterStickmenImage(
                 modifier = Modifier.fillMaxWidth(),
-                heightDp = seatsHeight
+                heightDp = seatsHeight      // ⬅️ bigger
             )
         }
     }
@@ -373,6 +319,7 @@ fun HomeScreen(
         )
     }
 }
+
 
 
 
