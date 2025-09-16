@@ -9,10 +9,13 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thatwaz.dadjokes.data.db.OwnedJoke
+import com.thatwaz.dadjokes.data.db.OwnedJokeDao
 import com.thatwaz.dadjokes.data.repository.CachedJokesRepo
 import com.thatwaz.dadjokes.data.repository.JokeRepository
 import com.thatwaz.dadjokes.data.repository.PrefsRepo
 import com.thatwaz.dadjokes.data.repository.SeenJokesRepo
+import com.thatwaz.dadjokes.data.source.LocalJokesSource
 import com.thatwaz.dadjokes.domain.model.Joke
 import com.thatwaz.dadjokes.domain.model.SavedJokeDelivery
 import com.thatwaz.dadjokes.domain.repository.SavedJokeRepository
@@ -32,13 +35,17 @@ import java.util.Calendar
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
+
+
 @HiltViewModel
 class JokeViewModel @Inject constructor(
-    private val repository: JokeRepository,
+    private val repository: JokeRepository,          // not used (kept to minimize DI churn)
     private val prefsRepo: PrefsRepo,
     private val savedRepo: SavedJokeRepository,
     private val seenRepo: SeenJokesRepo,
-    private val cachedRepo: CachedJokesRepo
+    private val cachedRepo: CachedJokesRepo,         // not used (kept to minimize DI churn)
+    private val localSource: LocalJokesSource,       // bundled + owned (Room)
+    private val ownedJokeDao: OwnedJokeDao           // for user submissions
 ) : ViewModel() {
 
     // ---- Single source of truth for the UI ----
@@ -61,25 +68,31 @@ class JokeViewModel @Inject constructor(
     @RequiresApi(Build.VERSION_CODES.O)
     val notificationTime: Flow<LocalTime> = prefsRepo.notificationTimeFlow
 
-    // Prevent overlapping network fetches
+    // Prevent overlapping fetches
     private val loading = AtomicBoolean(false)
 
     // Tunables
     private val ttlDays = 14
     private val ttlMillis = ttlDays * 24L * 60 * 60 * 1000
-    private val keepCount = 500
+    private val keepCount = 2000           // can be larger now since we're local-only
 
     // Session-level recent IDs to avoid immediate repeats
-    private val sessionSeen = LruStringSet(200)
+    private val sessionSeen = LruStringSet(400)
 
     init {
         viewModelScope.launch {
             seenRepo.purgeOlderThan(ttlMillis)
-            fetchFreshAndAppend() // loads first joke
+            fetchLocalAndAppend() // first load
         }
     }
 
-    /** Next button: move forward in history if possible, otherwise fetch fresh (single network call). */
+    /** Content-only hash for local jokes (owned + bundled). */
+    private fun contentHash(setup: String, punch: String): String {
+        val raw = "${setup.trim()}|${punch.trim()}".lowercase()
+        return raw.hashCode().toString()
+    }
+
+    /** Next button: move forward in history if possible, otherwise fetch locally. */
     fun loadNext() {
         if (currentIndex < jokeHistory.lastIndex) {
             currentIndex++
@@ -90,12 +103,15 @@ class JokeViewModel @Inject constructor(
         if (!loading.compareAndSet(false, true)) return
         viewModelScope.launch {
             try {
-                fetchFreshAndAppend()
+                fetchLocalAndAppend()
             } finally {
                 loading.set(false)
             }
         }
     }
+
+    /** Kept for compatibility */
+    fun showNextJoke() = loadNext()
 
     fun showPreviousJoke() {
         if (currentIndex > 0) {
@@ -105,13 +121,23 @@ class JokeViewModel @Inject constructor(
         }
     }
 
-    /** Kept for compatibility */
-    fun showNextJoke() = loadNext()
-
     fun rateCurrentJoke(rating: Int) {
         _joke.value = _joke.value?.copy(rating = rating)?.also { updated ->
             viewModelScope.launch { repository.saveRating(updated) }
             if (currentIndex in jokeHistory.indices) jokeHistory[currentIndex] = updated
+        }
+    }
+
+    // -------- User submissions --------
+
+    fun addUserSubmittedJoke(setup: String, punchline: String, credit: String? = null) {
+        val s = setup.trim()
+        val p = punchline.trim()
+        if (s.isEmpty()) return
+        // Use content-based ID so identical submissions upsert neatly
+        val id = "user_" + contentHash(s, p)
+        viewModelScope.launch {
+            ownedJokeDao.upsert(OwnedJoke(id = id, setup = s, punchline = p /* add credit if you extend schema */))
         }
     }
 
@@ -193,103 +219,50 @@ class JokeViewModel @Inject constructor(
         )
     }
 
-    // -------- Internals --------
+    // -------- Internals (LOCAL ONLY) --------
 
-    /** One network fetch. If it’s a repeat (14d or session), try a cached alternative (no extra network). */
-    private suspend fun fetchFreshAndAppend() {
-        try {
-            val candidate = repository.getJoke()
-
-            val candHash = stableJokeId(
-                candidate.setup,
-                candidate.punchline,
-                candidate.id.toString()
-            )
-            val recentlySeen = seenRepo.wasSeenWithin(candHash, ttlMillis)
-            val sessionRepeat = !sessionSeen.add(candHash)
-
-            val chosen: Joke? =
-                if (recentlySeen || sessionRepeat) pickLocalAlternative(candHash) else candidate
-
-            if (chosen != null) {
-                val h = stableJokeId(chosen.setup, chosen.punchline, chosen.id.toString())
-                // Cache ONLY what we display
-                cachedRepo.insert(
-                    setup = chosen.setup,
-                    punch = chosen.punchline,
-                    apiId = chosen.id,
-                    hash = h,
-                    type = chosen.type ?: "cached"
-                )
-                seenRepo.markSeen(h, keepCount)
-                sessionSeen.add(h)
-                addToHistory(chosen)
-            } else {
-                // Nothing suitable in cache — show the original (still only 1 network call)
-                cachedRepo.insert(
-                    setup = candidate.setup,
-                    punch = candidate.punchline,
-                    apiId = candidate.id,
-                    hash = candHash,
-                    type = candidate.type ?: "cached"
-                )
-                seenRepo.markSeen(candHash, keepCount)
-                sessionSeen.add(candHash)
-                addToHistory(candidate)
-            }
-        } catch (_: Exception) {
-            fallbackFromCacheOrWarn()
+    /**
+     * Local-only:
+     * 1) Try local (owned + bundled) unseen & not in-session.
+     * 2) If empty (tiny pool / all seen in 14d), relax rules progressively to avoid a dead end.
+     */
+    private suspend fun fetchLocalAndAppend() {
+        // 1) strict: not seen in 14d AND not in current session
+        localSource.pickLocalUnseen(
+            wasSeenWithin = { hash -> seenRepo.wasSeenWithin(hash, ttlMillis) },
+            sessionContains = { hash -> sessionSeen.contains(hash) }
+        )?.let { local ->
+            val h = contentHash(local.setup, local.punchline)
+            seenRepo.markSeen(h, keepCount)
+            sessionSeen.add(h)
+            addToHistory(local)
+            return
         }
-    }
 
-    /** Try to find an unseen, non-session-duplicate from cache without hitting network. */
-    private suspend fun pickLocalAlternative(originalHash: String): Joke? {
-        val cutoff = System.currentTimeMillis() - ttlMillis
-        // Prefer an unseen cached joke first
-        cachedRepo.pickUnseen(cutoff)?.let { c ->
-            if (!sessionSeen.contains(c.hash)) {
-                return Joke(
-                    id = c.apiId ?: 0,
-                    type = "cached",
-                    setup = c.setup,
-                    punchline = c.punchline,
-                    rating = 0
-                )
-            }
+        // 2) relaxed A: ignore 14d TTL but still avoid session duplicates
+        localSource.pickLocalUnseen(
+            wasSeenWithin = { _ -> false },                  // ignore TTL
+            sessionContains = { hash -> sessionSeen.contains(hash) }
+        )?.let { local ->
+            val h = contentHash(local.setup, local.punchline)
+            // do NOT re-mark seen; it was already marked; just add to session
+            sessionSeen.add(h)
+            addToHistory(local)
+            return
         }
-        // Fallback: any cached joke that’s not the same and not in-session
-        cachedRepo.pickAny()?.let { any ->
-            if (any.hash != originalHash && !sessionSeen.contains(any.hash)) {
-                return Joke(
-                    id = any.apiId ?: 0,
-                    type = "cached",
-                    setup = any.setup,
-                    punchline = any.punchline,
-                    rating = 0
-                )
-            }
-        }
-        return null
-    }
 
-    private suspend fun fallbackFromCacheOrWarn() {
-        val cutoff = System.currentTimeMillis() - ttlMillis
-        val cached = cachedRepo.pickUnseen(cutoff) ?: cachedRepo.pickAny()
-        if (cached != null) {
-            if (sessionSeen.contains(cached.hash)) return
-            val joke = Joke(
-                id = cached.apiId ?: 0,
-                type = "cached",
-                setup = cached.setup,
-                punchline = cached.punchline,
-                rating = 0
-            )
-            seenRepo.markSeen(cached.hash, keepCount)
-            sessionSeen.add(cached.hash)
-            addToHistory(joke)
-        } else {
-            Log.w("JokeViewModel", "No network and cache empty.")
+        // 3) relaxed B: allow session repeats as absolute last resort
+        localSource.pickLocalUnseen(
+            wasSeenWithin = { _ -> false },
+            sessionContains = { _ -> false }                // allow any
+        )?.let { local ->
+            val h = contentHash(local.setup, local.punchline)
+            sessionSeen.add(h)
+            addToHistory(local)
+            return
         }
+
+        Log.w("JokeViewModel", "Local pool exhausted (even with relaxed rules). Add more jokes!")
     }
 
     /** Append a joke as the new tail of history, trimming any forward items, and update UI. */
@@ -318,14 +291,14 @@ class JokeViewModel @Inject constructor(
     }
 }
 
-/** Tiny LRU set to avoid immediate session repeats (no external deps). */
+/** Tiny LRU set to avoid immediate session repeats (uses java.util deque). */
 private class LruStringSet(private val max: Int) {
-    private val order = java.util.ArrayDeque<String>(max)  // <-- force java.util
+    private val order = java.util.ArrayDeque<String>(max)
     private val set = HashSet<String>(max)
 
     fun add(v: String): Boolean {
         if (!set.add(v)) return false
-        order.addLast(v)                                    // OK on java.util.ArrayDeque
+        order.addLast(v)
         if (order.size > max) {
             val old = order.removeFirst()
             set.remove(old)
@@ -335,6 +308,7 @@ private class LruStringSet(private val max: Int) {
 
     fun contains(v: String) = set.contains(v)
 }
+
 
 
 

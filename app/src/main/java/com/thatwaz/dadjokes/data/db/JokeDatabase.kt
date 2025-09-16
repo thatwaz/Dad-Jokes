@@ -8,17 +8,20 @@ import androidx.room.RoomDatabase
         JokeEntity::class,
         SavedJokeEntity::class,
         SeenJoke::class,
-        CachedJokeEntity::class     // 👈 add
+        CachedJokeEntity::class,
+        OwnedJoke::class                 // 👈 added
     ],
-    version = 6,                    // 👈 bump (you used fallbackToDestructiveMigration)
+    version = 7,                         // 👈 bump (schema changed)
     exportSchema = false
 )
 abstract class JokeDatabase : RoomDatabase() {
     abstract fun jokeDao(): JokeDao
     abstract fun savedJokeDao(): SavedJokeDao
     abstract fun seenJokeDao(): SeenJokeDao
-    abstract fun cachedJokeDao(): CachedJokeDao   // 👈 add
+    abstract fun cachedJokeDao(): CachedJokeDao
+    abstract fun ownedJokeDao(): OwnedJokeDao      // 👈 added
 }
+
 
 
 
